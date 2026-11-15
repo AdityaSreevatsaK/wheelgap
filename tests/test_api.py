@@ -1,5 +1,6 @@
 import json
 import re
+from dataclasses import replace
 
 import pytest
 
@@ -205,6 +206,68 @@ def test_result_without_a_bundled_target_has_no_bundled_version(fake_pypi, fixtu
         "bundled" not in by_name["nowheels"].to_dict()
         and "bundled_version_differs" not in by_name["nowheels"].to_dict()
     )
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("same_version", [False, True])
+@pytest.mark.parametrize("method", ["offline", "index"])
+def test_pyodide_bundled_versions_are_per_python(fixtures, fake_pypi, reverse, same_version, method):
+    lock_313 = load_pyodide_lock(str(fixtures / "pyodide-lock.json"))
+    package = "markupsafe" if method == "offline" else "fastlib"
+    original_version = lock_313.packages[package]
+    next_version = original_version if same_version else "9.9.9"
+    lock_314 = replace(
+        lock_313,
+        source="fixture-pyodide-314",
+        python=(3, 14),
+        abi="2026_0",
+        packages={**lock_313.packages, package: next_version},
+    )
+    locks = [lock_313, lock_314]
+    if reverse:
+        locks.reverse()
+    targets = wheelgap.make_targets(python="3.13,3.14", platforms="pyodide")
+    if method == "offline":
+        result = wheelgap.check_package(
+            "MarkupSafe", "3.0.2", targets, files=["markupsafe-3.0.2.tar.gz"], pyodide_locks=locks
+        )
+    else:
+        (result,) = wheelgap.check_packages([("fastlib", "2.0.0")], targets, pyodide_locks=locks)
+
+    assert all(result.statuses[target] is Status.BUNDLED for target in targets)
+    expected = {"3.13": original_version, "3.14": next_version}
+    assert result.bundled_versions == expected
+    assert result.bundled_version == (original_version if same_version else None)
+    assert result.bundled_version_differs is not same_version
+    output = result.to_dict()
+    assert output["bundled_versions"] == expected
+    assert output["bundled_version_differs"] is not same_version
+    assert (output.get("bundled") == original_version) if same_version else ("bundled" not in output)
+    json.dumps(output)
+
+
+def test_pyodide_bundled_versions_excludes_locks_without_package(fixtures):
+    lock_313 = load_pyodide_lock(str(fixtures / "pyodide-lock.json"))
+    lock_314 = replace(
+        lock_313,
+        source="fixture-pyodide-314",
+        python=(3, 14),
+        abi="2026_0",
+        packages={k: v for k, v in lock_313.packages.items() if k != "markupsafe"},
+    )
+    targets = wheelgap.make_targets(python="3.13,3.14", platforms="pyodide")
+    result = wheelgap.check_package(
+        "MarkupSafe",
+        "3.0.2",
+        targets,
+        files=["markupsafe-3.0.2.tar.gz"],
+        pyodide_locks=[lock_314, lock_313],
+    )
+    assert result.statuses[targets[0]] is Status.BUNDLED
+    assert result.statuses[targets[1]] is Status.MISSING
+    assert result.bundled_versions == {"3.13": "3.0.2"}
+    assert result.bundled_version == "3.0.2"
+    assert result.to_dict()["bundled_versions"] == {"3.13": "3.0.2"}
 
 
 @pytest.mark.parametrize(
