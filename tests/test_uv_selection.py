@@ -1779,7 +1779,10 @@ def test_uv_manifest_git_urls_match_resolved_commit_sources(tmp_path, group):
 ]"""
     header = "[manifest.dependency-groups]\ndev = " if group else "[manifest]\nrequirements = "
     (tmp_path / "uv.lock").write_text(
-        "version = 1\n" + header + entries + """
+        "version = 1\n"
+        + header
+        + entries
+        + """
 [[package]]
 name = "example"
 version = "1.0"
