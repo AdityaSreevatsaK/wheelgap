@@ -1766,6 +1766,7 @@ def test_requirements_binary_options_abbreviated(tmp_path, line, expected):
     (six,) = parse_requirements(req).packages
     assert (six.no_binary, six.only_binary) == expected
 
+
 _UV_BUILD_POLICY_LOCK = """\
 version = 1
 [manifest]
