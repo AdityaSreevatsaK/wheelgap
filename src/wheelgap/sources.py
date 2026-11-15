@@ -74,9 +74,11 @@ class Package:
     resolutions: dict[str, Package] = field(default_factory=dict)
     # Files of a pinned release whose Requires-Python excludes the target Python, mapped to their --explain reason.
     requires_python_rejected: dict[str, str] = field(default_factory=dict)
-    # pip requirements.txt --no-binary / --only-binary policy for this package.
+    # Distribution selection policy from requirements files or uv project configuration.
     no_binary: bool = False
     only_binary: bool = False
+    # The relevant uv setting(s), used to explain a gap caused by the configured policy.
+    install_policy: str | None = None
 
     @property
     def key(self) -> str:
@@ -325,6 +327,59 @@ def _uv_edges(path: Path, p: dict) -> list[Edge]:
     return out
 
 
+def _uv_build_restrictions(path: Path, source: Source) -> None:
+    """Apply uv's project-level build and wheel restrictions to index packages in a lockfile.
+
+    uv.toml takes precedence over [tool.uv] in pyproject.toml when both are present.
+    uv's pip-only [tool.uv.pip] options do not apply to uv sync.
+    """
+    config_path = path.with_name("uv.toml")
+    standalone = config_path.is_file()
+    if not standalone:
+        config_path = path.with_name("pyproject.toml")
+        if not config_path.is_file():
+            return
+    try:
+        data = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    except tomllib.TOMLDecodeError as exc:
+        raise SourceError(f"{config_path}: invalid TOML: {exc}") from None
+    setting_table = "uv.toml" if standalone else "[tool.uv]"
+    uv = data if standalone else data.get("tool", {}).get("uv", {})
+    if not isinstance(uv, dict):
+        raise SourceError(f"{config_path}: {setting_table} must be a table")
+
+    for key in ("no-build", "no-binary"):
+        if not isinstance(uv.get(key, False), bool):
+            raise SourceError(f"{config_path}: {setting_table} {key} must be a boolean")
+
+    selected: dict[str, set[str]] = {}
+    for key in ("no-build-package", "no-binary-package"):
+        values = uv.get(key, [])
+        if not isinstance(values, list) or not all(isinstance(name, str) for name in values):
+            raise SourceError(f"{config_path}: {setting_table} {key} must be a list of strings")
+        if any(not _NAME_RE.fullmatch(name) for name in values):
+            raise SourceError(f"{config_path}: {setting_table} {key} must contain valid package names")
+        selected[key] = {canonicalize_name(name) for name in values}
+
+    for pkg in source.packages:
+        if pkg.skip:  # uv may build first-party/editable dependencies; wheelgap skips these.
+            continue
+        restrictions = []
+        if uv.get("no-build"):
+            pkg.only_binary = True
+            restrictions.append(f"{setting_table} no-build")
+        elif pkg.key in selected["no-build-package"]:
+            pkg.only_binary = True
+            restrictions.append(f"{setting_table} no-build-package")
+        if uv.get("no-binary"):
+            pkg.no_binary = True
+            restrictions.append(f"{setting_table} no-binary")
+        elif pkg.key in selected["no-binary-package"]:
+            pkg.no_binary = True
+            restrictions.append(f"{setting_table} no-binary-package")
+        pkg.install_policy = ", ".join(restrictions) or None
+
+
 def parse_uv_lock(path: Path) -> Source:
     data = tomllib.loads(path.read_text(encoding="utf-8"))
     manifest = data.get("manifest", {})
@@ -362,6 +417,7 @@ def parse_uv_lock(path: Path) -> Source:
         # (directory = "libs/x") is reached through its dependents' edges and their markers instead.
         if (kind in ("editable", "virtual") and src.get(kind) == ".") or pkg.key in members:
             source.roots.append(i)
+    _uv_build_restrictions(path, source)
     for name, group in manifest_groups.items():
         for d in group:
             source.root_groups[len(source.root_edges)] = name
