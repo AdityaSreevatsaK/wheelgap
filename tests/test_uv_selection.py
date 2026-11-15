@@ -1736,8 +1736,8 @@ wheels = [
         encoding="utf-8",
     )
     (new / "uv.lock").write_text(_manifest_torch_lock(group), encoding="utf-8")
-    flags = ["--only-group", "dev"] if group else []
-    assert diff_main([str(old), str(new), *flags, "-p", "3.13", "-t", "linux-x86_64", "-t", "macos-arm64"]) == 0
+    # diff compares full installed graphs; its CLI has no group-selection flags.
+    assert diff_main([str(old), str(new), "-p", "3.13", "-t", "linux-x86_64", "-t", "macos-arm64"]) == 0
     assert capsys.readouterr().out.splitlines() == ["Nothing got worse."]
     assert fake_pypi == []
 
@@ -1771,5 +1771,7 @@ def test_uv_manifest_flat_source_wrong_type_is_input_error(tmp_path, key):
         f'version = 1\n[manifest]\nrequirements = [{{ name = "example", {key} = 42 }}]\n',
         encoding="utf-8",
     )
-    with pytest.raises(SourceError, match=rf"the manifest has a dependency 'example' with a \x60{key}\x60 that isn't a string"):
+    with pytest.raises(
+        SourceError, match=rf"the manifest has a dependency 'example' with a \x60{key}\x60 that isn't a string"
+    ):
         load_inputs([str(tmp_path)])
