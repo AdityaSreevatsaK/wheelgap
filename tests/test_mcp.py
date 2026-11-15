@@ -423,11 +423,47 @@ def test_check_dockerfile_alpine_image_gives_musl_targets(fake_pypi, tmp_path, f
     dockerfile = dockerfile_project(tmp_path, fixtures, "FROM python:3.12 AS build\nFROM python:3.13-alpine\n")
     (_, reply) = run(init(), call("check_dockerfile", dockerfile=str(dockerfile)))
     data = reply["result"]["structuredContent"]
-    assert data["image"] == {"python": "3.13", "platform": "musl-x86_64", "glibc": None, "musl": "1.2"}
+    assert data["image"] == {
+        "python": "3.13", "platform": "musl-x86_64", "glibc": None, "musl": "1.2", "build_args": {}
+    }
     assert data["targets"] == ["3.13 musl-x86_64"]
     assert data["path"] == str(tmp_path.resolve())  # default: the Dockerfile's folder
     assert {g["name"] for g in data["gaps"]} >= {"nativeext", "puresdist"}
     assert {s["name"] for s in data["skipped"]} == {"demo", "gitdep"}
+
+
+
+@pytest.mark.parametrize(
+    ("dockerfile_text", "defaults", "expected_python"),
+    [
+        ("ARG PYTHON_VERSION=3.12\nFROM python:${PYTHON_VERSION}-slim\n", {"PYTHON_VERSION": "3.12"}, "3.12"),
+        (
+            "ARG PYTHON_VERSION=3.13\nARG DISTRO=alpine\nFROM python:${PYTHON_VERSION}-${DISTRO}\n",
+            {"PYTHON_VERSION": "3.13", "DISTRO": "alpine"},
+            "3.13",
+        ),
+    ],
+)
+def test_check_dockerfile_reports_used_arg_defaults(
+    fake_pypi, tmp_path, fixtures, dockerfile_text, defaults, expected_python
+):
+    dockerfile = dockerfile_project(tmp_path, fixtures, dockerfile_text)
+    (_, reply) = run(init(), call("check_dockerfile", dockerfile=str(dockerfile)))
+    assert not reply["result"].get("isError")
+    data = reply["result"]["structuredContent"]
+    assert data["image"]["build_args"] == defaults
+    assert data["image"]["python"] == expected_python
+    assert all("-p/-t" not in note for note in data["notes"])
+    for name, value in defaults.items():
+        assert any(f"FROM uses the default of ARG {name}={value}" in note for note in data["notes"])
+    assert any("use check_lockfile with python and targets instead" in note for note in data["notes"])
+
+
+def test_check_dockerfile_ignores_unused_arg_defaults(fake_pypi, tmp_path, fixtures):
+    dockerfile = dockerfile_project(tmp_path, fixtures, "ARG UNUSED=3.12\nFROM python:3.13-slim\n")
+    (_, reply) = run(init(), call("check_dockerfile", dockerfile=str(dockerfile)))
+    assert reply["result"]["structuredContent"]["image"]["build_args"] == {}
+    assert not any("FROM uses the default of ARG" in note for note in reply["result"]["structuredContent"]["notes"])
 
 
 def test_check_dockerfile_matches_the_cli(fake_pypi, tmp_path, fixtures, capsys):
