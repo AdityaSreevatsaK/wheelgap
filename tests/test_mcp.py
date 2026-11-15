@@ -424,13 +424,16 @@ def test_check_dockerfile_alpine_image_gives_musl_targets(fake_pypi, tmp_path, f
     (_, reply) = run(init(), call("check_dockerfile", dockerfile=str(dockerfile)))
     data = reply["result"]["structuredContent"]
     assert data["image"] == {
-        "python": "3.13", "platform": "musl-x86_64", "glibc": None, "musl": "1.2", "build_args": {}
+        "python": "3.13",
+        "platform": "musl-x86_64",
+        "glibc": None,
+        "musl": "1.2",
+        "build_args": {},
     }
     assert data["targets"] == ["3.13 musl-x86_64"]
     assert data["path"] == str(tmp_path.resolve())  # default: the Dockerfile's folder
     assert {g["name"] for g in data["gaps"]} >= {"nativeext", "puresdist"}
     assert {s["name"] for s in data["skipped"]} == {"demo", "gitdep"}
-
 
 
 @pytest.mark.parametrize(
