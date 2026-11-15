@@ -565,6 +565,21 @@ def marker_holds(
 Parent = int | str | None
 
 
+def _uv_source_matches(package: dict, edge_source: dict[str, object]) -> bool:
+    """Match uv source tables, including git manifests without a resolved commit.
+
+    uv lock --script writes \x60git = "URL"\x60 in the manifest, while the matching
+    package's source has \x60git = "URL#commit"\x60.
+    """
+    locked = package.get("source")
+    if locked == edge_source:
+        return True
+    if not isinstance(locked, dict) or set(locked) != {"git"} or set(edge_source) != {"git"}:
+        return False
+    requested, resolved = edge_source["git"], locked["git"]
+    return isinstance(requested, str) and isinstance(resolved, str) and resolved.startswith(f"{requested}#")
+
+
 def _narrow_candidates(
     source: Source,
     candidates: list[int],
@@ -586,7 +601,7 @@ def _narrow_candidates(
         candidates = matched or candidates  # retain conservative fallback for incomplete lock metadata
     if edge_source is not None and source.uv_packages is not None:
         uv_packages = source.uv_packages
-        sourced = [i for i in candidates if uv_packages[i].get("source") == edge_source]
+        sourced = [i for i in candidates if _uv_source_matches(uv_packages[i], edge_source)]
         candidates = sourced or candidates
     return candidates
 

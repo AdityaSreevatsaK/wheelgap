@@ -274,6 +274,40 @@ def _uv_edge(path: Path, owner: str, d: object) -> Edge:
     return (d["name"], d.get("version"), d.get("marker"), edge_source)
 
 
+# A uv manifest writes source provenance as flat keys, unlike package dependency edges.
+# Keep the normalised table on the manifest entry too: --group/--no-dev walks those
+# entries directly, while the default graph walks root_edges.
+_UV_MANIFEST_SOURCE_KEYS = {
+    "index": "registry",
+    "path": "path",
+    "url": "url",
+    "git": "git",
+    "editable": "editable",
+    "directory": "directory",
+    "virtual": "virtual",
+}
+
+
+def _uv_manifest_edge(path: Path, d: object) -> Edge:
+    name, version, marker, source = _uv_edge(path, "the manifest", d)
+    assert isinstance(d, dict)
+    flat_source: dict[str, object] = {}
+    for key, kind in _UV_MANIFEST_SOURCE_KEYS.items():
+        if key not in d:
+            continue
+        value = d[key]
+        if not isinstance(value, str):
+            reason = f"the manifest has a dependency {name!r} with a `{key}` that isn't a string"
+            raise SourceError(f"{path.name}: {reason}")
+        flat_source[kind] = value
+    if len(flat_source) > 1 or (flat_source and source is not None):
+        raise SourceError(f"{path.name}: the manifest has a dependency {name!r} with conflicting sources")
+    if flat_source:
+        source = flat_source
+        d["source"] = source
+    return name, version, marker, source
+
+
 def _uv_edges(path: Path, p: dict) -> list[Edge]:
     """A uv.lock package's dependency edges, from `dependencies` and the two tables of groups."""
     owner = f"package {p.get('name')}"
@@ -331,8 +365,8 @@ def parse_uv_lock(path: Path) -> Source:
     for name, group in manifest_groups.items():
         for d in group:
             source.root_groups[len(source.root_edges)] = name
-            source.root_edges.append(_uv_edge(path, "the manifest", d))
-    source.root_edges.extend(_uv_edge(path, "the manifest", d) for d in manifest.get("requirements", []))
+            source.root_edges.append(_uv_manifest_edge(path, d))
+    source.root_edges.extend(_uv_manifest_edge(path, d) for d in manifest.get("requirements", []))
     if not source.roots and not source.root_edges:
         source.edges = None  # no idea where the graph starts; treat every package as needed
     if isinstance(data.get("requires-python"), str):
