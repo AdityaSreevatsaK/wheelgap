@@ -1790,7 +1790,7 @@ sdist = { url = "https://files.example/puresdist-1.0.tar.gz" }
         ("no-build = true", {"fastlib": (False, True), "puresdist": (False, True)}),
         ("no-binary = true", {"fastlib": (True, False), "puresdist": (True, False)}),
         ('no-build-package = ["PureSDIST"]', {"fastlib": (False, False), "puresdist": (False, True)}),
-        ('no-binary-package = ["Fast_Lib"]', {"fastlib": (True, False), "puresdist": (False, False)}),
+        ('no-binary-package = ["FASTLIB"]', {"fastlib": (True, False), "puresdist": (False, False)}),
         (
             'no-build-package = ["fastlib"]\nno-binary-package = ["fastlib"]',
             {"fastlib": (True, True), "puresdist": (False, False)},
