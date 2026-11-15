@@ -191,6 +191,7 @@ def test_result_reports_the_version_pyodide_bundles(fixtures, version, differs):
     result = wheelgap.check_package("MarkupSafe", version, [linux, pyodide], files=files, pyodide_locks=[lock])
     assert result.statuses[pyodide] is Status.BUNDLED and result.gaps == [linux]  # a different version still passes
     assert result.bundled_version == "3.0.2" and result.bundled_version_differs is differs
+    assert result.bundled_versions == {"3.13": "3.0.2"}
     assert result.to_dict()["bundled"] == "3.0.2" and result.to_dict()["bundled_version_differs"] is differs
 
 
@@ -202,8 +203,10 @@ def test_result_without_a_bundled_target_has_no_bundled_version(fake_pypi, fixtu
     }
     assert by_name["fastlib"].bundled_version == "2.0.0" and not by_name["fastlib"].bundled_version_differs
     assert by_name["nowheels"].bundled_version is None
+    assert by_name["nowheels"].bundled_versions == {}
     assert (
         "bundled" not in by_name["nowheels"].to_dict()
+        and "bundled_versions" not in by_name["nowheels"].to_dict()
         and "bundled_version_differs" not in by_name["nowheels"].to_dict()
     )
 
@@ -268,6 +271,32 @@ def test_pyodide_bundled_versions_excludes_locks_without_package(fixtures):
     assert result.bundled_versions == {"3.13": "3.0.2"}
     assert result.bundled_version == "3.0.2"
     assert result.to_dict()["bundled_versions"] == {"3.13": "3.0.2"}
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_check_lockfile_reports_bundled_versions_per_python(tmp_path, fake_pypi, fixtures, reverse):
+    lock_313 = load_pyodide_lock(str(fixtures / "pyodide-lock.json"))
+    lock_314 = replace(
+        lock_313,
+        source="fixture-pyodide-314",
+        python=(3, 14),
+        abi="2026_0",
+        packages={**lock_313.packages, "fastlib": "9.9.9"},
+    )
+    locks = [lock_313, lock_314]
+    if reverse:
+        locks.reverse()
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("fastlib==2.0.0\n", encoding="utf-8")
+    targets = wheelgap.make_targets(python="3.13,3.14", platforms="pyodide")
+    results = wheelgap.check_lockfile(requirements, targets, pyodide_locks=locks)
+    assert len(results) == 1
+    result = results[0]
+    assert all(result.statuses[target] is Status.BUNDLED for target in targets)
+    assert result.bundled_versions == {"3.13": "2.0.0", "3.14": "9.9.9"}
+    assert result.bundled_version is None
+    assert result.bundled_version_differs
+    assert result.to_dict()["bundled_versions"] == result.bundled_versions
 
 
 @pytest.mark.parametrize(
