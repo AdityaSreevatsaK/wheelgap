@@ -297,7 +297,10 @@ def _uv_manifest_edge(path: Path, d: object) -> Edge:
             continue
         value = d[key]
         if not isinstance(value, str):
-            raise SourceError(f"{path.name}: the manifest has a dependency {name!r} with a \x60{key}\x60 that isn't a string")
+            raise SourceError(
+                f"{path.name}: the manifest has a dependency {name!r} "
+                f"with a `{key}` that isn't a string"
+            )
         flat_source[kind] = value
     if len(flat_source) > 1 or (flat_source and source is not None):
         raise SourceError(f"{path.name}: the manifest has a dependency {name!r} with conflicting sources")
