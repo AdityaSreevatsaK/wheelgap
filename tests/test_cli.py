@@ -3588,6 +3588,7 @@ def test_range_split_both_releases_with_different_gaps_counts_as_one_package(cap
     assert code == 0
     assert "2 gaps in 1 package on advisory targets 3.9 linux-x86_64, 3.13 linux-x86_64 don't fail the run." in out
 
+
 @pytest.mark.parametrize(
     "setting,package,expected,policy_label",
     [
