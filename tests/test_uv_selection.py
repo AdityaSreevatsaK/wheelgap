@@ -1801,3 +1801,12 @@ source = { git = "file:///repo/other#2222222" }
     linux, macos = build_targets(["3.13"], ["linux-x86_64", "macos-arm64"])
     assert list(reachable(source, linux)) == [0]
     assert list(reachable(source, macos)) == [1]
+
+
+def test_uv_manifest_requirement_with_two_sources_is_input_error(tmp_path):
+    (tmp_path / "uv.lock").write_text(
+        'version = 1\n[manifest]\nrequirements = [{ name = "example", index = "https://x/simple", path = "a" }]\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(SourceError, match="the manifest has a dependency 'example' with conflicting sources"):
+        load_inputs([str(tmp_path)])
