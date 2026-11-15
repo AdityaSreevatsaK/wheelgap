@@ -5,7 +5,7 @@ import tomllib
 import pytest
 
 from wheelgap import check as check_module
-from wheelgap.check import check, marker_holds, poetry_extras_decide, poetry_marker_holds
+from wheelgap.check import check, marker_holds, poetry_extras_decide, poetry_marker_holds, reachable
 from wheelgap.cli import main
 from wheelgap.sources import (
     SourceError,
@@ -1767,3 +1767,34 @@ def test_uv_manifest_flat_source_wrong_type_is_input_error(tmp_path, key):
         SourceError, match=rf"the manifest has a dependency 'example' with a \x60{key}\x60 that isn't a string"
     ):
         load_inputs([str(tmp_path)])
+
+
+@pytest.mark.parametrize("group", [False, True], ids=["script-requirements", "virtual-workspace-group"])
+def test_uv_manifest_git_urls_match_resolved_commit_sources(tmp_path, group):
+    # uv 0.10.0 writes git = "file:///repo" in the manifest, but
+    # source = { git = "file:///repo#<commit>" } in the locked package.
+    entries = """[
+    { name = "example", marker = "sys_platform == 'linux'", git = "file:///repo/linux" },
+    { name = "example", marker = "sys_platform != 'linux'", git = "file:///repo/other" },
+]"""
+    header = "[manifest.dependency-groups]\ndev = " if group else "[manifest]\nrequirements = "
+    (tmp_path / "uv.lock").write_text(
+        "version = 1\n" + header + entries + """
+[[package]]
+name = "example"
+version = "1.0"
+source = { git = "file:///repo/linux#1111111" }
+
+[[package]]
+name = "example"
+version = "1.0"
+source = { git = "file:///repo/other#2222222" }
+""",
+        encoding="utf-8",
+    )
+    (source,) = load_inputs([str(tmp_path)])
+    if group:
+        select_uv_dependencies([source], UvSelection(only_groups=frozenset({"dev"})))
+    linux, macos = build_targets(["3.13"], ["linux-x86_64", "macos-arm64"])
+    assert list(reachable(source, linux)) == [0]
+    assert list(reachable(source, macos)) == [1]
