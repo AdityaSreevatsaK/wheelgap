@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- uv.lock: a top-level requirement in `[manifest] requirements` (a `uv lock --script` lock) or `[manifest.dependency-groups]` (a virtual workspace) now counts only the package from the source it names, so two entries with the same name and version from different indexes (torch from the PyTorch CPU index on Linux, from PyPI elsewhere) each count only where uv installs them, as #299 did for package dependencies. A git requirement matches the locked package whatever commit it resolved to, and a source key of the wrong type, or two sources on one requirement, is an input error. (#363, thanks [@AdityaSreevatsaK](https://github.com/AdityaSreevatsaK))
 - MCP: `check_dockerfile`'s `image` now has `build_args`, the global `ARG` defaults its `FROM` used (`{}` when none), and its note about them says to use `check_lockfile` with `python` and `targets` if the build sets `--build-arg`, instead of the command line's `-p/-t` advice. (#348, thanks [@AdityaSreevatsaK](https://github.com/AdityaSreevatsaK))
 - `--explain --suggest` now formats suggestions as a Markdown list when combined with `--markdown`, placed below the `<details>` block for rejected wheels. (`--markdown --suggest` without `--explain` remains an error.) (#347, thanks [@dianatofficial](https://github.com/dianatofficial))
 - MCP `check_lockfile` accepts an `environment` argument to check a named pixi environment instead of `default`. Unknown environment errors list the names in the lockfile. (#344, thanks [@MAD1IZJOD](https://github.com/MAD1IZJOD))
