@@ -263,8 +263,9 @@ def _git_blob(ref: str, path: str) -> subprocess.CompletedProcess[bytes]:
 def read_git_ref(ref: str, path: str, into: Path) -> str:
     """Write the file at REF:PATH to a file named like PATH in `into` (so its format is detected) and return it.
 
-    The pyproject.toml next to it at that ref comes along when there is one: an older poetry.lock takes its
-    direct dependencies from there, so leaving it behind would change the answer for that side.
+    The pyproject.toml and uv.toml next to it at that ref come along when there are some: an older poetry.lock
+    takes its direct dependencies from pyproject.toml, and a uv.lock its no-build and no-binary settings from either,
+    so leaving them behind would change the answer for that side.
     """
     done = _git_blob(ref, path)
     if done.returncode != 0:
@@ -275,11 +276,13 @@ def read_git_ref(ref: str, path: str, into: Path) -> str:
     posix = path.replace("\\", "/")
     out = side / posixpath.basename(posix)
     out.write_bytes(done.stdout)
-    if out.name != "pyproject.toml":
-        folder = posixpath.dirname(posix)
-        project = _git_blob(ref, f"{folder}/pyproject.toml" if folder else "pyproject.toml")
-        if project.returncode == 0:  # none at that ref is normal: nothing to bring along
-            (side / "pyproject.toml").write_bytes(project.stdout)
+    folder = posixpath.dirname(posix)
+    for config in ("pyproject.toml", "uv.toml"):
+        if out.name == config:
+            continue
+        found = _git_blob(ref, f"{folder}/{config}" if folder else config)
+        if found.returncode == 0:  # none at that ref is normal: nothing to bring along
+            (side / config).write_bytes(found.stdout)
     return str(out)
 
 

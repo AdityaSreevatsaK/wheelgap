@@ -70,7 +70,9 @@ another index keep their locked files and are never looked up on PyPI.
 files are present, `uv.toml` takes precedence, as it does for `uv sync`. These settings affect
 index packages (not local, Git or editable packages that wheelgap skips). `no-build` forbids
 source builds; `no-binary` excludes wheels. `--explain` identifies the applicable settings.
-Invalid setting types are input errors.
+Invalid setting types are input errors. Only the files beside the lock are read: settings in a `uv.toml` in a
+parent directory, in your user-level uv config or in `UV_NO_BUILD`-style environment variables aren't. `wheelgap diff`
+with a git ref reads that ref's `pyproject.toml` and `uv.toml` beside the lock.
 
 **Python versions outside `requires-python`:** uv only keeps the wheels that can serve the lock's `requires-python`.
 If it leaves out a Python you check (say `==3.13.*`, checked with `-p 3.14t`), wheelgap also looks the lock's PyPI
