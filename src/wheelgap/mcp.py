@@ -246,8 +246,9 @@ TOOLS: list[dict[str, Any]] = [
             "--dockerfile DOCKERFILE --json` does: the image's Python, platform (from FROM --platform, default "
             "linux/amd64) and glibc or musl version (python:3.13-alpine means musl) set the target. Use it before "
             "changing a FROM line, e.g. from -slim to -alpine or to --platform=linux/arm64. Returns what "
-            "check_lockfile returns, plus 'image': the python, platform, glibc and musl wheelgap read from the "
-            "Dockerfile. A Dockerfile wheelgap can't read the way Docker does is a tool error saying what to pass "
+            "check_lockfile returns, plus 'image': the python, platform, glibc, musl and build_args wheelgap read "
+            "from the Dockerfile (build_args maps global ARG defaults used by FROM to their values). A Dockerfile "
+            "wheelgap can't read the way Docker does is a tool error saying what to pass "
             "instead. " + _STATUS_HELP
         ),
         "inputSchema": {
@@ -476,7 +477,23 @@ def _check_dockerfile(args: dict[str, Any]) -> dict[str, Any]:
         if raw or "no lockfile found" not in str(e):
             raise
         raise ToolError(f"{e} (pass 'path': the lockfile or project directory)") from e
-    out["image"] = {"python": image.python, "platform": image.platform, "glibc": image.glibc, "musl": image.musl}
+    out["image"] = {
+        "python": image.python,
+        "platform": image.platform,
+        "glibc": image.glibc,
+        "musl": image.musl,
+        "build_args": dict(image.build_args),
+    }
+    # The CLI flags cannot be passed to check_dockerfile: give the corresponding MCP tool advice instead.
+    out["notes"] = [
+        note.replace(
+            "pass -p/-t if the build sets --build-arg",
+            "if the build sets --build-arg, use check_lockfile with python and targets instead",
+        )
+        if "FROM uses the default of ARG " in note
+        else note
+        for note in out["notes"]
+    ]
     return out
 
 
