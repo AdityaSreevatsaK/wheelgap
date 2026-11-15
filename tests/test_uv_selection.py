@@ -1684,20 +1684,14 @@ wheels = [{{ url = "{_FILES}/torch-2.5.1-cp313-none-macosx_11_0_arm64.whl", hash
 def _manifest_torch_lock(group: bool) -> str:
     if not group:
         return TWO_INDEX_MANIFEST_TORCH_LOCK
-    return TWO_INDEX_MANIFEST_TORCH_LOCK.replace(
-        "requirements = [", "[manifest.dependency-groups]\ndev = [", 1
-    )
+    return TWO_INDEX_MANIFEST_TORCH_LOCK.replace("requirements = [", "[manifest.dependency-groups]\ndev = [", 1)
 
 
 @pytest.mark.parametrize("group", [False, True], ids=["script-requirements", "virtual-workspace-group"])
-def test_uv_manifest_two_indexes_same_version_selects_only_matching_source(
-    tmp_path, capsys, fake_pypi, group
-):
+def test_uv_manifest_two_indexes_same_version_selects_only_matching_source(tmp_path, capsys, fake_pypi, group):
     (tmp_path / "uv.lock").write_text(_manifest_torch_lock(group), encoding="utf-8")
     flags = ["--only-group", "dev"] if group else []
-    assert main(
-        [str(tmp_path), *flags, "-p", "3.13", "-t", "linux-x86_64", "-t", "macos-arm64", "--json"]
-    ) == 0
+    assert main([str(tmp_path), *flags, "-p", "3.13", "-t", "linux-x86_64", "-t", "macos-arm64", "--json"]) == 0
     packages = json.loads(capsys.readouterr().out)["packages"]
     assert [(p["name"], p["results"]) for p in packages] == [
         ("torch", {"linux-x86_64": "wheel", "macos-arm64": "n/a"}),
@@ -1707,9 +1701,7 @@ def test_uv_manifest_two_indexes_same_version_selects_only_matching_source(
 
 
 @pytest.mark.parametrize("group", [False, True], ids=["script-requirements", "virtual-workspace-group"])
-def test_uv_manifest_two_indexes_diff_does_not_report_false_regressions(
-    tmp_path, capsys, fake_pypi, group
-):
+def test_uv_manifest_two_indexes_diff_does_not_report_false_regressions(tmp_path, capsys, fake_pypi, group):
     from wheelgap.diff import main as diff_main
 
     old = tmp_path / "old"
@@ -1717,9 +1709,9 @@ def test_uv_manifest_two_indexes_diff_does_not_report_false_regressions(
     old.mkdir()
     new.mkdir()
     header = (
-        "[manifest.dependency-groups]\ndev = [{ name = \"torch\" }]"
+        '[manifest.dependency-groups]\ndev = [{ name = "torch" }]'
         if group
-        else "[manifest]\nrequirements = [{ name = \"torch\" }]"
+        else '[manifest]\nrequirements = [{ name = "torch" }]'
     )
     (old / "uv.lock").write_text(
         f"""version = 1
