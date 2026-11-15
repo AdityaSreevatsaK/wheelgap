@@ -349,7 +349,10 @@ def _uv_build_restrictions(path: Path, source: Source) -> None:
     except tomllib.TOMLDecodeError as exc:
         raise SourceError(f"{config_path}: invalid TOML: {exc}") from None
     setting_table = "uv.toml" if standalone else "[tool.uv]"
-    uv = data if standalone else data.get("tool", {}).get("uv", {})
+    tool = data.get("tool", {})
+    if not isinstance(tool, dict):
+        raise SourceError(f"{config_path}: [tool] must be a table")
+    uv = data if standalone else tool.get("uv", {})
     if not isinstance(uv, dict):
         raise SourceError(f"{config_path}: {setting_table} must be a table")
 

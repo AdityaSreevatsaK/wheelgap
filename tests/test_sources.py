@@ -1830,3 +1830,10 @@ def test_uv_build_policy_rejects_wrong_types(tmp_path, setting, key):
     (tmp_path / "pyproject.toml").write_text("[tool.uv]\n" + setting + "\n", encoding="utf-8")
     with pytest.raises(SourceError, match=key):
         load_inputs([str(tmp_path)])
+
+
+def test_uv_build_policy_rejects_a_tool_key_that_isnt_a_table(tmp_path):
+    (tmp_path / "uv.lock").write_text('version = 1\n[[package]]\nname = "a"\nversion = "1.0"\n', encoding="utf-8")
+    (tmp_path / "pyproject.toml").write_text('tool = "uv"\n', encoding="utf-8")
+    with pytest.raises(SourceError, match=r"\[tool\] must be a table"):
+        load_inputs([str(tmp_path)])
