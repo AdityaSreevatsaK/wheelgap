@@ -706,6 +706,8 @@ def render_explain(
             if needs and r.results[t] == Status.SOURCE:  # once per release, under its first source cell
                 out.append(f"  build needs: {needs}")
                 needs = None
+            if r.package.install_policy:
+                out.append(f"  install policy: {r.package.install_policy}")
             lines = explain_lines(
                 files,
                 t,

@@ -3587,3 +3587,36 @@ def test_range_split_both_releases_with_different_gaps_counts_as_one_package(cap
     code, out, _ = run(capsys, *base, "--advisory", "linux-x86_64", "--color", "never")
     assert code == 0
     assert "2 gaps in 1 package on advisory targets 3.9 linux-x86_64, 3.13 linux-x86_64 don't fail the run." in out
+
+
+@pytest.mark.parametrize(
+    "setting,package,expected,policy_label",
+    [
+        ("no-build = true", "puresdist", "missing", "[tool.uv] no-build"),
+        ('no-binary-package = ["fastlib"]', "fastlib", "source", "[tool.uv] no-binary-package"),
+        ("no-binary = true", "fastlib", "source", "[tool.uv] no-binary"),
+    ],
+)
+def test_uv_build_policy_changes_cli_status_and_explanation(
+    tmp_path, capsys, fake_pypi, setting, package, expected, policy_label
+):
+    (tmp_path / "uv.lock").write_text(
+        'version = 1\n[manifest]\nrequirements = [{ name = "fastlib" }, { name = "puresdist" }]\n'
+        '[[package]]\nname = "fastlib"\nversion = "2.0.0"\n'
+        'source = { registry = "https://pypi.org/simple" }\n'
+        'wheels = [{ url = "https://files.example/fastlib-2.0.0-cp313-cp313-manylinux_2_17_x86_64.whl" }]\n'
+        'sdist = { url = "https://files.example/fastlib-2.0.0.tar.gz" }\n'
+        '[[package]]\nname = "puresdist"\nversion = "1.0"\n'
+        'source = { registry = "https://pypi.org/simple" }\n'
+        'sdist = { url = "https://files.example/puresdist-1.0.tar.gz" }\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "pyproject.toml").write_text("[tool.uv]\n" + setting + "\n", encoding="utf-8")
+    code = main([str(tmp_path), "-p", "3.13", "-t", "linux-x86_64", "--json"])
+    packages = {item["name"]: item for item in json.loads(capsys.readouterr().out)["packages"]}
+    assert code == 1
+    assert packages[package]["results"]["linux-x86_64"] == expected
+    assert main([str(tmp_path), "-p", "3.13", "-t", "linux-x86_64", "--explain"]) == 1
+    output = capsys.readouterr().out
+    assert policy_label in output
+    assert fake_pypi == []
