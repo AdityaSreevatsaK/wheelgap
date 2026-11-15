@@ -65,6 +65,13 @@ only a Windows-only dependency pulls in isn't reported on Linux.
 **Skipped:** packages whose source is `editable`, `virtual`, `git`, `path`, `directory` or `url`. Packages from
 another index keep their locked files and are never looked up on PyPI.
 
+**Build restrictions:** wheelgap reads `no-build`, `no-build-package`, `no-binary` and
+`no-binary-package` from the adjacent `pyproject.toml`'s `[tool.uv]` table or `uv.toml`. When both
+files are present, `uv.toml` takes precedence, as it does for `uv sync`. These settings affect
+index packages (not local, Git or editable packages that wheelgap skips). `no-build` forbids
+source builds; `no-binary` excludes wheels. `--explain` identifies the applicable settings.
+Invalid setting types are input errors.
+
 **Python versions outside `requires-python`:** uv only keeps the wheels that can serve the lock's `requires-python`.
 If it leaves out a Python you check (say `==3.13.*`, checked with `-p 3.14t`), wheelgap also looks the lock's PyPI
 packages up on the index, keeps the locked files if a lookup fails, and prints a note. `--offline` skips that
