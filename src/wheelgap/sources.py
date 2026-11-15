@@ -291,7 +291,7 @@ _UV_MANIFEST_SOURCE_KEYS = {
 def _uv_manifest_edge(path: Path, d: object) -> Edge:
     name, version, marker, source = _uv_edge(path, "the manifest", d)
     assert isinstance(d, dict)
-    flat_source: dict[str, str] = {}
+    flat_source: dict[str, object] = {}
     for key, kind in _UV_MANIFEST_SOURCE_KEYS.items():
         if key not in d:
             continue
