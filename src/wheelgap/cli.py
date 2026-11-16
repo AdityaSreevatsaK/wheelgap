@@ -1668,7 +1668,9 @@ def _main(argv: list[str]) -> int:
                 dimensions = ("python_version", "sys_platform", "platform_machine")
                 if not report_env or any(
                     report_env.get(key) != target.marker_env.get(key)
-                    for target in targets for key in dimensions if key in report_env
+                    for target in targets
+                    for key in dimensions
+                    if key in report_env
                 ):
                     print(
                         f"wheelgap: note: {source.label}: pip's installation report contains packages resolved "
