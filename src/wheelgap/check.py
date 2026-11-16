@@ -801,8 +801,8 @@ def _selected_direct_dependencies(
     source: Source, target: Target, installed: dict[int, Parent] | dict[int, list[str]], selection: UvSelection
 ) -> dict[int, tuple[str, ...]]:
     """Attribute selected uv dependencies per direct root, keeping requested extras separate. With no --extra/--group
-    selection, `selection` is UvSelection(): what `uv sync` installs by default (default groups, no extras), so a
-    package reached only through another package's extra is credited only to the direct dependency that asks for it."""
+    selection, `selection` is UvSelection(): the project's own dependencies and the dev group, no extras. That walks
+    less than reachable() installs, so some packages get no hint, but every one credited really is reached that way."""
     packages = source.uv_packages or []
     roots = uv_selected_roots(source)
     available = {canonicalize_name(n) for n in source.uv_manifest.get("dependency-groups", {})} | {
