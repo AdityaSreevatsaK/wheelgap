@@ -548,7 +548,9 @@ def _check_lockfile(args: dict[str, Any]) -> dict[str, Any]:
     if offline:
         argv.append("--offline")
     if dependencies:
-        argv.append("--deps")
+        # The CLI writes a gap's 'via' only under --explain. Avoid --deps' automatic
+        # release suggestions; the MCP tool needs the paths, not extra release lookups.
+        argv += ["--deps", "--explain", "--no-suggest"]
     return _run_cli(argv, path)
 
 
