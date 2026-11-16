@@ -47,6 +47,58 @@ All five are read-only. They look packages up on PyPI, or on the index in
   whether the upgrade lost a wheel.
 - `list_targets`: the platform names the other tools accept.
 
+
+### `check_package` arguments
+
+| Argument | Type | Default and purpose |
+| --- | --- | --- |
+| `name` | string, required | PyPI package name (without a version specifier) |
+| `version` | string | Latest release; an exact version such as `2.3.4` may be supplied (the latest may not support older Python) |
+| `python` | string | Server Python; a comma-separated list such as `3.13,3.14t` |
+| `targets` | string array | Default native platforms; see `list_targets` |
+| `glibc` | string | `2.36`; use `2.28` for RHEL 8 Linux targets |
+| `musl` | string | `1.2`; Alpine libc version |
+| `macos` | string | `14.0`; oldest supported macOS version |
+| `pyodide_lock` | string | None; path or HTTPS URL for bundled Pyodide packages |
+| `explain` | boolean | `false`; show rejected wheels and the issue tracker |
+| `dependencies` | boolean | `false`; resolve and check the whole dependency tree |
+
+### `check_lockfile` arguments
+
+| Argument | Type | Default and purpose |
+| --- | --- | --- |
+| `path` | string, required | Lockfile, requirements file or project directory (absolute path, file URI or client-root-relative path) |
+| `environment` | string | `default`; only for pixi.lock environments |
+| `python` | string | Project settings, .python-version, then server Python |
+| `targets` | string array | Project settings or native defaults |
+| `glibc` | string | `2.36` or project setting; e.g. `2.28` on RHEL 8 |
+| `musl` | string | `1.2` or project setting; Alpine libc version |
+| `macos` | string | `14.0` or project setting; oldest supported macOS |
+| `pyodide_lock` | string | Project setting or none; bundled Pyodide lock path or HTTPS URL |
+| `offline` | boolean | `false`; `true` uses only recorded files and never contacts the index |
+
+### `check_dockerfile` arguments
+
+| Argument | Type | Default and purpose |
+| --- | --- | --- |
+| `dockerfile` | string, required | Dockerfile path or file URI |
+| `path` | string | Dockerfile's folder; lockfile or project directory |
+| `build_args` | object of strings | `{}`; override Dockerfile global ARG defaults |
+| `targets` | string array | Image platform; override with Docker-style platform names if needed |
+
+### `diff_lockfiles` arguments
+
+| Argument | Type | Default and purpose |
+| --- | --- | --- |
+| `old` | string, required | Before-change lockfile or project directory |
+| `new` | string, required | After-change lockfile or project directory |
+| `python` | string | Server Python; comma-separated versions accepted |
+| `targets` | string array | Native defaults; targets to compare |
+
+### `list_targets` arguments
+
+No arguments. It returns supported platforms, groups, aliases, libc defaults and server Python.
+
 On `pyodide` targets, `check_package` and `check_lockfile` take an optional
 `pyodide_lock` (a path or https URL of a `pyodide-lock.json`, as
 `--pyodide-lock` does), so packages Pyodide ships itself show as `bundled`.
