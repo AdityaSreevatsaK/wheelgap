@@ -328,16 +328,16 @@ def annotation(
     message = f"{name} {'; '.join(parts)}"
     # The same direct requirement may be behind several gap targets. A source line is correct
     # only when every gap target has exactly the same single direct parent.
-    roots = [
-        row.direct_via.get(t, ())
-        for t in targets
-        if t not in row.ignored and row.results[t] in GAP_WORDS
-    ]
-    direct = dict(
-        (canonicalize_name(parent), parent)
-        for parents in roots
-        for parent in parents
+    source = locator.sources.get(id(pkg))
+    # Keep existing lockfile annotations unchanged. Only resolved file inputs lost their
+    # source locations, and they alone need the new parent-based annotation context.
+    resolved_file = bool(source and source.deps_paths is not None and source.kind in ("requirements", "pyproject"))
+    roots = (
+        [row.direct_via.get(t, ()) for t in targets if t not in row.ignored and row.results[t] in GAP_WORDS]
+        if resolved_file
+        else []
     )
+    direct = dict((canonicalize_name(parent), parent) for parents in roots for parent in parents)
     if direct:
         names = list(direct.values())
         message += f" (via {names[0]}{f' +{len(names) - 1}' if len(names) > 1 else ''})"
