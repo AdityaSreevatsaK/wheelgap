@@ -3652,16 +3652,17 @@ def test_uv_build_policy_changes_cli_status_and_explanation(
     assert policy_label in output
     assert fake_pypi == []
 
+
 def _write_transitive_table_lock(tmp_path, *, several=False, marked=False):
     deps = ['{ name = "mcp" }']
     if several:
         deps.extend(['{ name = "requests" }', '{ name = "click" }'])
     if marked:
-        deps.append('{ name = "platformer", marker = "sys_platform == \\'win32\\'" }')
+        deps.append('{ name = "platformer", marker = "sys_platform == \'win32\'" }')
     text = (
-        'version = 1\\n'
-        '[[package]]\\nname = "app"\\nversion = "1"\\nsource = { editable = "." }\\n'
-        f'dependencies = [{", ".join(deps)}]\\n'
+        'version = 1\n'
+        '[[package]]\nname = "app"\nversion = "1"\nsource = { editable = "." }\n'
+        f'dependencies = [{", ".join(deps)}]\n'
     )
     for name in ("mcp", "requests", "click", "platformer"):
         if name != "mcp" and not (several or (marked and name == "platformer")):
@@ -3669,15 +3670,15 @@ def _write_transitive_table_lock(tmp_path, *, several=False, marked=False):
         if name == "platformer" and not marked:
             continue
         text += (
-            f'[[package]]\\nname = "{name}"\\nversion = "1"\\n'
-            'source = { registry = "https://pypi.org/simple" }\\n'
-            'dependencies = [{ name = "cryptography" }]\\n'
-            f'wheels = [{{ url = "https://files.example/{name}-1-py3-none-any.whl" }}]\\n'
+            f'[[package]]\nname = "{name}"\nversion = "1"\n'
+            'source = { registry = "https://pypi.org/simple" }\n'
+            'dependencies = [{ name = "cryptography" }]\n'
+            f'wheels = [{{ url = "https://files.example/{name}-1-py3-none-any.whl" }}]\n'
         )
     text += (
-        '[[package]]\\nname = "cryptography"\\nversion = "50.0.2"\\n'
-        'source = { registry = "https://pypi.org/simple" }\\n'
-        'sdist = { url = "https://files.example/cryptography-50.0.2.tar.gz" }\\n'
+        '[[package]]\nname = "cryptography"\nversion = "50.0.2"\n'
+        'source = { registry = "https://pypi.org/simple" }\n'
+        'sdist = { url = "https://files.example/cryptography-50.0.2.tar.gz" }\n'
     )
     (tmp_path / "uv.lock").write_text(text, encoding="utf-8")
 
