@@ -870,6 +870,12 @@ def _fill_json_data(pkg: Package, data: dict, python: str | None, base: str) -> 
             names = [u["filename"] for u in urls if not u.get("yanked")]
             pkg.files = names
         pkg.found_on_pypi = base == DEFAULT_INDEX
+        if pkg.found_on_pypi:
+            # Only reuse metadata already fetched for wheel selection. Never make an
+            # additional PyPI request just because --explain was given.
+            from .issue_links import project_issues_url
+
+            pkg.issues_url = project_issues_url(data.get("info"))
     except (ValueError, TypeError, KeyError, AttributeError):
         pkg.error = "unexpected response from the index"
     return pkg
