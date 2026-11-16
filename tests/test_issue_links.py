@@ -39,7 +39,7 @@ def test_explain_text_markdown_and_json_add_tracker_link(monkeypatch, fake_pypi,
 
     def fetch_with_tracker(url, **kwargs):
         data = original(url, **kwargs)
-        if url.endswith("/nowheels/json"):
+        if url.endswith("/nowheels/json") or url.endswith("/nowheels/0.9/json"):
             data["info"]["project_urls"] = {"Bug Tracker": "https://github.com/org/repo/issues"}
         return data
 
