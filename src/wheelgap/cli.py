@@ -1664,10 +1664,11 @@ def _main(argv: list[str]) -> int:
         sources = [parse_dist(Path(args.dist))] if args.dist else load_inputs(args.inputs or ["."], args.environment)
         for source in sources:
             if source.kind == "pip-report" and not quiet:
-                env = source.pip_report_env or {}
+                report_env = source.pip_report_env or {}
                 dimensions = ("python_version", "sys_platform", "platform_machine")
-                if not env or any(
-                    env.get(key) != target.marker_env.get(key) for target in targets for key in dimensions if key in env
+                if not report_env or any(
+                    report_env.get(key) != target.marker_env.get(key)
+                    for target in targets for key in dimensions if key in report_env
                 ):
                     print(
                         f"wheelgap: note: {source.label}: pip's installation report contains packages resolved "
