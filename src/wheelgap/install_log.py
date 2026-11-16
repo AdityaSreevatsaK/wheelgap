@@ -8,7 +8,7 @@ from pathlib import Path
 
 from packaging.utils import canonicalize_name
 
-from .sources import SourceError, _NAME_RE
+from .sources import _NAME_RE, SourceError
 
 MAX_LOG_BYTES = 1024 * 1024
 
