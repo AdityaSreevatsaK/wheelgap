@@ -55,8 +55,6 @@ class _Tree:
     chosen: dict[str, str] = field(default_factory=dict)  # key -> version
     errors: dict[str, str] = field(default_factory=dict)  # key -> why it has no version
     paths: dict[str, list[str]] = field(default_factory=dict)  # key -> names from a top-level requirement down
-    direct_roots: list[str] = field(default_factory=list)
-    links: dict[str, list[str]] = field(default_factory=dict)  # parent key -> dependencies reached on this target
     imposed: dict[str, set[str]] = field(default_factory=dict)  # key -> specifiers on it from installed edges
 
 
@@ -204,13 +202,6 @@ class Resolver:
             if req.marker is not None and not marker_holds(str(req.marker), target, extras=parent_extras):
                 continue
             key = canonicalize_name(req.name)
-            if path:
-                parent = canonicalize_name(path[-1])
-                links = tree.links.setdefault(parent, [])
-                if key not in links:
-                    links.append(key)
-            elif key not in tree.direct_roots:
-                tree.direct_roots.append(key)
             spec = str(req.specifier)
             tree.imposed.setdefault(key, set()).add(spec)
             wanted = frozenset(canonicalize_name(e) for e in req.extras)
@@ -334,20 +325,48 @@ def pinned_complete(source: Source) -> bool:
     )
 
 
-def _direct_roots(tree: _Tree) -> dict[str, tuple[str, ...]]:
-    """All direct requested packages that reach each transitive dependency on this target."""
-    owners: dict[str, dict[str, None]] = {}
-    queue: deque[tuple[str, str]] = deque()
-    for root in tree.direct_roots:
-        owners.setdefault(root, {})[root] = None
-        queue.append((root, root))
+def _direct_roots(
+    tree: _Tree, roots: list[Requirement], resolver: Resolver, target: Target
+) -> dict[str, tuple[str, ...]]:
+    """Attribute a resolved package to the direct requirements that actually requested it.
+
+    Traverse each root's active extras independently. A shared package requested with an
+    extra by one root must not make its optional dependencies look like the other root's.
+    Metadata is cached by Resolver.requires from the resolution pass.
+    """
+    owners: dict[str, dict[str, str]] = {}
+    direct: set[str] = set()
+    seen: dict[tuple[str, str], frozenset[str]] = {}
+    queue: deque[tuple[Requirement, frozenset[str], str, str]] = deque()
+    for root in roots:
+        if root.marker is not None and not marker_holds(str(root.marker), target):
+            continue
+        key = canonicalize_name(root.name)
+        direct.add(key)
+        queue.append((root, frozenset(), key, resolver.names.get(key, root.name)))
+
     while queue:
-        name, root = queue.popleft()
-        for dependency in tree.links.get(name, []):
-            if root not in owners.setdefault(dependency, {}):
-                owners[dependency][root] = None
-                queue.append((dependency, root))
-    return {key: tuple(roots) for key, roots in owners.items() if key not in tree.direct_roots}
+        req, parent_extras, owner, label = queue.popleft()
+        if req.marker is not None and not marker_holds(str(req.marker), target, extras=parent_extras):
+            continue
+        key = canonicalize_name(req.name)
+        if key not in tree.chosen:
+            continue
+        owners.setdefault(key, {})[owner] = label
+        wanted = frozenset(canonicalize_name(extra) for extra in req.extras)
+        state = (key, owner)
+        previous = seen.get(state)
+        if previous is not None and wanted <= previous:
+            continue
+        seen[state] = wanted if previous is None else previous | wanted
+        if key in tree.errors:
+            continue
+        try:
+            requirements = resolver.requires(key, tree.chosen[key], target)
+        except Exception:
+            continue  # Resolver already recorded the metadata error; hints must not change results
+        queue.extend((child, seen[state], owner, label) for child in requirements)
+    return {key: tuple(labels.values()) for key, labels in owners.items() if key not in direct}
 
 
 def resolve_deps(source: Source, targets: list[Target], resolver: Resolver | None = None) -> None:
@@ -365,7 +384,7 @@ def resolve_deps(source: Source, targets: list[Target], resolver: Resolver | Non
         tree = resolver.resolve(roots, target, constraints=source.constraint_specs)
         reach: dict[int, list[str]] = {}
         direct: dict[int, tuple[str, ...]] = {}
-        direct_names = _direct_roots(tree)
+        direct_names = _direct_roots(tree, roots, resolver, target)
         for key, path in tree.paths.items():
             version, error = tree.chosen.get(key), tree.errors.get(key)
             if version is None and error is None:
