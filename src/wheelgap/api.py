@@ -423,7 +423,12 @@ def check_lockfile(
     SourceError unless every target matches that environment's platform, machine, Python and implementation.
     """
     return _check_lockfile(
-        path, targets, online=online, offline=offline, pyodide_locks=pyodide_locks, environment=environment,
+        path,
+        targets,
+        online=online,
+        offline=offline,
+        pyodide_locks=pyodide_locks,
+        environment=environment,
         deps=deps,
     )[0]
 
@@ -466,8 +471,7 @@ def _check_lockfile(
     if deps:
         if source.kind not in ("requirements", "pyproject"):
             raise SourceError(
-                "--deps applies to requirements files or pyproject.toml; "
-                "a lockfile already lists what it installs"
+                "--deps applies to requirements files or pyproject.toml; a lockfile already lists what it installs"
             )
         if offline:
             raise SourceError("offline=True: --deps would look packages up on PyPI; set offline=False")
