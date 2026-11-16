@@ -13,6 +13,7 @@ import wheelgap
 from wheelgap import cache, deps, pypi
 from wheelgap.cli import main
 from wheelgap.deps import DepsError, Resolver
+from wheelgap.sources import SourceError
 
 ANY = "py3-none-any.whl"
 LINUX = "cp314-cp314-manylinux_2_17_x86_64.whl"
@@ -820,7 +821,7 @@ def test_api_check_lockfile_deps_accepts_pyproject_and_directory(index, tmp_path
         tree = wheelgap.check_lockfile(path, targets, deps=True)
         assert {r.name for r in tree} == {"app", "lib", "crypt", "winonly"}
         assert next(r for r in tree if r.name == "crypt").via[targets[0]] == ("app", "lib", "crypt")
-    with pytest.raises(wheelgap.SourceError, match="direct dependencies only"):
+    with pytest.raises(SourceError, match="direct dependencies only"):
         wheelgap.check_lockfile(pyproject, targets)
 
 
@@ -828,16 +829,16 @@ def test_api_check_lockfile_deps_refuses_lockfile_and_offline(index, tmp_path):
     requirements = tmp_path / "requirements.txt"
     requirements.write_text("app==1.0\n", encoding="utf-8")
     targets = wheelgap.make_targets("3.14", "win-arm64")
-    with pytest.raises(wheelgap.SourceError, match="--deps"):
+    with pytest.raises(SourceError, match="--deps"):
         wheelgap.check_lockfile(requirements, targets, deps=True, offline=True)
     uvlock = tmp_path / "uv.lock"
     uvlock.write_text("version = 1\n", encoding="utf-8")
-    with pytest.raises(wheelgap.SourceError, match="lockfile already lists"):
+    with pytest.raises(SourceError, match="lockfile already lists"):
         wheelgap.check_lockfile(uvlock, targets, deps=True)
 
 
 def test_api_check_lockfile_deps_refuses_private_index(index, tmp_path):
     requirements = tmp_path / "requirements.txt"
     requirements.write_text("--index-url https://private.example/simple\napp==1.0\n", encoding="utf-8")
-    with pytest.raises(wheelgap.SourceError, match="installer index"):
+    with pytest.raises(SourceError, match="installer index"):
         wheelgap.check_lockfile(requirements, wheelgap.make_targets("3.14", "win-arm64"), deps=True)
