@@ -500,6 +500,7 @@ def test_deps_doesnt_turn_suggest_on_for_a_lockfile_among_the_inputs(index, caps
     capsys.readouterr()
     assert not [u for u in index if "secretpkg" in u]
 
+
 def test_deps_tables_count_distinct_direct_requirements(index, capsys):
     for display in ([], ["--markdown"]):
         code = main(["parenta", "parentb", "--deps", "-p", "3.14", "-t", "win-arm64", *display])
@@ -528,10 +529,19 @@ def test_deps_extra_only_labels_the_requesting_direct_root(index, capsys):
 
 
 def test_deps_direct_origins_preserve_roots_across_multiple_targets(index, capsys):
-    code = main([
-        "parenta", "parentb", "--deps", "-p", "3.14",
-        "-t", "win-arm64", "-t", "linux-x86_64",
-    ])
+    code = main(
+        [
+            "parenta",
+            "parentb",
+            "--deps",
+            "-p",
+            "3.14",
+            "-t",
+            "win-arm64",
+            "-t",
+            "linux-x86_64",
+        ]
+    )
     out = capsys.readouterr().out
     assert code == 1
     assert "crypt (via parenta +1)" in out
