@@ -15,7 +15,7 @@ can be repeated; `-p`, `-t`, `--ignore` and `--advisory` also take comma-separat
 
 `wheelgap --help` lists the flags of the version you run. This page describes `main`; flags marked **after 0.11.0**
 aren't in a release yet.
-## --from-log FILE
+### `--from-log` {#from-log}
 
 Diagnose a failed pip or uv wheel build from a bounded installation log, or use `-` for stdin:
 
