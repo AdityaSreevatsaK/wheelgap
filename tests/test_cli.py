@@ -3651,3 +3651,77 @@ def test_uv_build_policy_changes_cli_status_and_explanation(
     output = capsys.readouterr().out
     assert policy_label in output
     assert fake_pypi == []
+
+def _write_transitive_table_lock(tmp_path, *, several=False, marked=False):
+    deps = ['{ name = "mcp" }']
+    if several:
+        deps.extend(['{ name = "requests" }', '{ name = "click" }'])
+    if marked:
+        deps.append('{ name = "platformer", marker = "sys_platform == \\'win32\\'" }')
+    text = (
+        'version = 1\\n'
+        '[[package]]\\nname = "app"\\nversion = "1"\\nsource = { editable = "." }\\n'
+        f'dependencies = [{", ".join(deps)}]\\n'
+    )
+    for name in ("mcp", "requests", "click", "platformer"):
+        if name != "mcp" and not (several or (marked and name == "platformer")):
+            continue
+        if name == "platformer" and not marked:
+            continue
+        text += (
+            f'[[package]]\\nname = "{name}"\\nversion = "1"\\n'
+            'source = { registry = "https://pypi.org/simple" }\\n'
+            'dependencies = [{ name = "cryptography" }]\\n'
+            f'wheels = [{{ url = "https://files.example/{name}-1-py3-none-any.whl" }}]\\n'
+        )
+    text += (
+        '[[package]]\\nname = "cryptography"\\nversion = "50.0.2"\\n'
+        'source = { registry = "https://pypi.org/simple" }\\n'
+        'sdist = { url = "https://files.example/cryptography-50.0.2.tar.gz" }\\n'
+    )
+    (tmp_path / "uv.lock").write_text(text, encoding="utf-8")
+
+
+@pytest.mark.parametrize("markdown", [False, True])
+def test_transitive_gap_table_names_its_direct_parent(capsys, tmp_path, fake_pypi, markdown):
+    _write_transitive_table_lock(tmp_path)
+    args = ["--markdown"] if markdown else []
+    code, out, err = run(capsys, str(tmp_path), "-p", "3.13", "-t", "linux-x86_64", "--offline", *args)
+    assert code == 1 and not err
+    assert "cryptography (via mcp)" in out
+    assert "mcp (via" not in out
+    assert fake_pypi == []
+
+
+@pytest.mark.parametrize("markdown", [False, True])
+def test_transitive_gap_table_counts_distinct_direct_parents(capsys, tmp_path, fake_pypi, markdown):
+    _write_transitive_table_lock(tmp_path, several=True)
+    args = ["--markdown"] if markdown else []
+    code, out, err = run(capsys, str(tmp_path), "-p", "3.13", "-t", "linux-x86_64", "--offline", *args)
+    assert code == 1 and not err
+    assert "cryptography (via mcp +2)" in out
+    assert fake_pypi == []
+
+
+def test_transitive_gap_table_respects_marker_and_selected_graph(capsys, tmp_path, fake_pypi):
+    _write_transitive_table_lock(tmp_path, marked=True)
+    for target, expected in (("linux-x86_64", "cryptography (via mcp)"), ("win-amd64", "cryptography (via mcp +1)")):
+        code, out, err = run(capsys, str(tmp_path), "-p", "3.13", "-t", target, "--no-dev", "--offline")
+        assert code == 1 and not err
+        assert expected in out
+    assert fake_pypi == []
+
+
+def test_transitive_gap_table_no_graph_quiet_and_json_unchanged(capsys, tmp_path, fake_pypi):
+    _write_transitive_table_lock(tmp_path)
+    base = (str(tmp_path), "-p", "3.13", "-t", "linux-x86_64", "--offline")
+    code, out, _ = run(capsys, *base, "-q")
+    assert code == 1 and "via" not in out
+    code, out, _ = run(capsys, *base, "--json", "--explain")
+    assert code == 1
+    crypto = next(p for p in json.loads(out)["packages"] if p["name"] == "cryptography")
+    assert crypto["via"]["linux-x86_64"] == ["app", "mcp", "cryptography"]
+    assert "via_direct" not in crypto
+    code, out, _ = run(capsys, "nowheels", "-p", "3.13", "-t", "linux-x86_64")
+    assert code == 1 and "nowheels" in out and "(via " not in out
+    assert fake_pypi == ["https://pypi.org/pypi/nowheels/json"]
