@@ -631,6 +631,22 @@ def resolve_advisory(values: list[str], how: str, docker_musl: bool, checked: li
     return list(dict.fromkeys(platforms)), unchecked
 
 
+def gap_name(row: Row) -> str:
+    """Show why a transitive gap is present, without changing JSON, --explain or quiet output."""
+    if row.ok:
+        return row.package.name
+    direct: dict[str, str] = {}
+    for target, status in row.results.items():
+        if target not in row.ignored and status in (Status.SOURCE, Status.MISSING, Status.UNKNOWN):
+            for name in row.direct_via.get(target, ()):
+                direct.setdefault(canonicalize_name(name), name)
+    if not direct:
+        return row.package.name
+    first = next(iter(direct.values()))
+    extra = f" +{len(direct) - 1}" if len(direct) > 1 else ""
+    return f"{row.package.name} (via {first}{extra})"
+
+
 def render_table(
     rows: list[Row], targets: list[Target], style: Style, advisory: frozenset[Target] = frozenset()
 ) -> list[str]:
@@ -638,7 +654,7 @@ def render_table(
     headers = ["package", "version"] + [heading(t, multi_py, advisory) for t in targets]
     body = []
     for r in rows:
-        cells = [r.package.name, r.package.version or "?"]
+        cells = [gap_name(r), r.package.version or "?"]
         cells += [cell(r, t)[0] for t in targets]
         body.append(cells)
     widths = [max(len(h), *(len(c[i]) for c in body)) for i, h in enumerate(headers)]
@@ -1183,7 +1199,7 @@ def render_markdown(
         out.append("| " + " | ".join(_md(h) for h in headers) + " |")
         out.append("| " + " | ".join("---" for _ in headers) + " |")
         for r in shown:
-            cells = [r.package.name, r.package.version or "?"] + [cell(r, t)[0] for t in targets]
+            cells = [gap_name(r), r.package.version or "?"] + [cell(r, t)[0] for t in targets]
             out.append("| " + " | ".join(_md(c) for c in cells) + " |")
         out.append("")
         hidden = [] if args.all else [r for r in rows if r.ok]
