@@ -21,7 +21,16 @@ try:  # packaging's parsed-marker node types (private, so guarded: without them 
 except ImportError:  # pragma: no cover
     _Value = _Variable = None  # type: ignore[assignment,misc]
 
-from .sources import Edge, Package, PoetryExtras, Source, uv_extra_names, uv_group_names, uv_selected_roots
+from .sources import (
+    Edge,
+    Package,
+    PoetryExtras,
+    Source,
+    UvSelection,
+    uv_extra_names,
+    uv_group_names,
+    uv_selected_roots,
+)
 from .targets import ANDROID_FLOOR, IOS_FLOOR, MANYLINUX_FLOOR, MANYLINUX_X86_ARCHES, PLATFORMS, Target
 
 
@@ -789,11 +798,11 @@ def applies(pkg: Package, target: Target) -> bool:
 
 
 def _selected_direct_dependencies(
-    source: Source, target: Target, installed: dict[int, Parent] | dict[int, list[str]]
+    source: Source, target: Target, installed: dict[int, Parent] | dict[int, list[str]], selection: UvSelection
 ) -> dict[int, tuple[str, ...]]:
-    """Attribute selected uv dependencies per direct root, keeping requested extras separate."""
-    selection = source.uv_selection
-    assert selection is not None
+    """Attribute selected uv dependencies per direct root, keeping requested extras separate. With no --extra/--group
+    selection, `selection` is UvSelection(): what `uv sync` installs by default (default groups, no extras), so a
+    package reached only through another package's extra is credited only to the direct dependency that asks for it."""
     packages = source.uv_packages or []
     roots = uv_selected_roots(source)
     available = {canonicalize_name(n) for n in source.uv_manifest.get("dependency-groups", {})} | {
@@ -878,8 +887,8 @@ def direct_dependencies(
     """Map transitive packages to distinct direct dependencies, without counting duplicate paths."""
     if source.edges is None:
         return {}
-    if source.uv_selection is not None:
-        return _selected_direct_dependencies(source, target, installed)
+    if source.uv_packages is not None:  # a uv.lock: walk extras per owner, selected or uv's defaults
+        return _selected_direct_dependencies(source, target, installed, source.uv_selection or UvSelection())
     by_name: dict[str, list[int]] = {}
     for i, pkg in enumerate(source.packages):
         by_name.setdefault(pkg.key, []).append(i)
@@ -888,6 +897,10 @@ def direct_dependencies(
     def follow(edges: Iterable[Edge]) -> list[int]:
         found: list[int] = []
         for name, version, marker, origin in edges:
+            # An edge that depends on an extra: the graph doesn't say which owner asked for that extra, so it
+            # credits nobody (no hint) rather than every direct dependency that reaches the package.
+            if marker is not None and "extra" in str(marker):
+                continue
             if marker_holds(marker, target):
                 found.extend(
                     i
@@ -932,6 +945,9 @@ def direct_dependencies(
     return {i: tuple(found.values()) for i, found in owners.items() if i not in direct}
 
 
+HINTED = (Status.SOURCE, Status.MISSING, Status.UNKNOWN)  # the statuses the table's (via ...) hint is shown for
+
+
 def hint_direct_dependencies(
     source: Source, target: Target, installed: dict[int, Parent] | dict[int, list[str]]
 ) -> dict[int, tuple[str, ...]]:
@@ -958,11 +974,8 @@ def check(sources: list[Source], targets: list[Target]) -> list[Row]:
             }
         else:
             installed = None
-        via_direct = (
-            {t: hint_direct_dependencies(source, t, installed[t]) for t in targets}
-            if installed is not None and source.edges is not None
-            else {}
-        )
+        # The (via ...) hint, per target, worked out only when a gap needs it: JSON, MCP and gap-free runs never pay.
+        hints: dict[Target, dict[int, tuple[str, ...]]] = {}
         for i, pkg in enumerate(source.packages):
             if pkg.skip:
                 continue
@@ -1002,7 +1015,10 @@ def check(sources: list[Source], targets: list[Target]) -> list[Row]:
                             row.direct_via[t] = direct
                         elif source.deps_direct is None and len(row.via[t]) > 1:
                             row.direct_via[t] = (row.via[t][0],)
-                    elif direct := via_direct.get(t, {}).get(i):
-                        row.direct_via[t] = direct
+                    elif row.results[t] in HINTED and source.edges is not None:
+                        if t not in hints:
+                            hints[t] = hint_direct_dependencies(source, t, installed[t])
+                        if direct := hints[t].get(i):
+                            row.direct_via[t] = direct
             rows.extend(resolved_rows.values())
     return rows

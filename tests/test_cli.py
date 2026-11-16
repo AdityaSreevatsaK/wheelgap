@@ -3809,3 +3809,48 @@ def test_selected_uv_extra_is_attributed_only_to_the_direct_requester(capsys, tm
     assert "cryptography (via mcp)" in out
     assert "cryptography (via mcp +1)" not in out
     assert fake_pypi == []
+
+
+def test_default_uv_extra_is_attributed_only_to_the_direct_requester(capsys, tmp_path, fake_pypi):
+    # With no --extra/--group/--no-dev the hint walks extras per owner too: shared[crypto] is only mcp's.
+    (tmp_path / "uv.lock").write_text(
+        "version = 1\n"
+        '[[package]]\nname = "app"\nversion = "1"\nsource = { editable = "." }\n'
+        'dependencies = [{ name = "plain" }, { name = "mcp" }]\n'
+        '[[package]]\nname = "mcp"\nversion = "1"\nsource = { registry = "https://pypi.org/simple" }\n'
+        'dependencies = [{ name = "shared", extra = ["crypto"] }]\n'
+        'wheels = [{ url = "https://files.example/mcp-1-py3-none-any.whl" }]\n'
+        '[[package]]\nname = "plain"\nversion = "1"\nsource = { registry = "https://pypi.org/simple" }\n'
+        'dependencies = [{ name = "shared" }]\n'
+        'wheels = [{ url = "https://files.example/plain-1-py3-none-any.whl" }]\n'
+        '[[package]]\nname = "shared"\nversion = "1"\nsource = { registry = "https://pypi.org/simple" }\n'
+        'wheels = [{ url = "https://files.example/shared-1-py3-none-any.whl" }]\n'
+        '[package.optional-dependencies]\ncrypto = [{ name = "cryptography" }]\n'
+        '[[package]]\nname = "cryptography"\nversion = "50.0.2"\n'
+        'source = { registry = "https://pypi.org/simple" }\n'
+        'sdist = { url = "https://files.example/cryptography-50.0.2.tar.gz" }\n',
+        encoding="utf-8",
+    )
+    code, out, err = run(capsys, str(tmp_path), "-p", "3.13", "-t", "linux-x86_64", "--offline")
+    assert code == 1 and not err
+    assert "cryptography (via mcp)" in out
+    assert "via plain" not in out and "(via mcp +1)" not in out
+    assert fake_pypi == []
+
+
+def test_poetry_extra_edge_credits_nobody(capsys, tmp_path, fake_pypi):
+    # Poetry's graph doesn't record which parent asked for an extra, so a package behind one gets no (via ...) hint.
+    (tmp_path / "poetry.lock").write_text(
+        '[[package]]\nname = "plain"\nversion = "1"\n'
+        'files = [{ file = "plain-1-py3-none-any.whl" }]\n'
+        '[package.dependencies]\nshared = "*"\n\n'
+        '[[package]]\nname = "shared"\nversion = "1"\n'
+        'files = [{ file = "shared-1-py3-none-any.whl" }]\n'
+        '[package.dependencies]\ncryptography = { version = "*", optional = true, markers = \'extra == "crypto"\' }\n\n'
+        '[[package]]\nname = "cryptography"\nversion = "50.0.2"\n'
+        'files = [{ file = "cryptography-50.0.2.tar.gz" }]\n\n'
+        '[metadata]\nlock-version = "1.1"\n',
+        encoding="utf-8",
+    )
+    code, out, err = run(capsys, str(tmp_path), "-p", "3.13", "-t", "linux-x86_64", "--offline")
+    assert "via plain" not in out

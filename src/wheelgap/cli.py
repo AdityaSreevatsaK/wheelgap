@@ -632,7 +632,8 @@ def resolve_advisory(values: list[str], how: str, docker_musl: bool, checked: li
 
 
 def gap_name(row: Row) -> str:
-    """Show why a transitive gap is present, without changing JSON, --explain or quiet output."""
+    """The table's package cell: the name, plus `(via direct-dep +N)` for a transitive gap.
+    JSON and quiet output keep the bare name."""
     if row.ok:
         return row.package.name
     direct: dict[str, str] = {}
