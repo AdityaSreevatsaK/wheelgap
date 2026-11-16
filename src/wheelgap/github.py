@@ -240,9 +240,14 @@ class Locator:
             self.found[id(source)] = self._read(source, source.path)
         found = self.found[id(source)]
         if source.kind == "requirements":
-            # The package came from a line with its name and markers (constraints change only the version). If
-            # there are two such lines, it could be either, so neither is used.
-            matches = [(f, n) for p, f, n in found.get(package.key, []) if p.markers == package.markers]
+            # A resolved dependency has new Package objects and no source-line markers. Its original
+            # requirement is safe to locate only if the name occurs on exactly one root line.
+            entries = found.get(package.key, [])
+            matches = (
+                [(f, n) for _, f, n in entries]
+                if source.deps_paths is not None
+                else [(f, n) for p, f, n in entries if p.markers == package.markers]
+            )
             return matches[0] if len(matches) == 1 else (source.path, None)
         numbers = found.get((package.key, package.version), [])
         # pdm.lock and Pipfile.lock keep the first entry of a name and version (sources._add_once); the other
@@ -251,13 +256,31 @@ class Locator:
             return source.path, numbers[0]
         return source.path, None
 
+    def locate_root(self, package: Package, root: str) -> Location | None:
+        """Locate one direct requirement that introduced a transitive package, if unambiguous."""
+        source = self.sources.get(id(package))
+        if source is None or source.path is None:
+            return None
+        if source.kind != "requirements":
+            return source.path, None  # pyproject.toml has no safe package line
+        if id(source) not in self.found:
+            self.found[id(source)] = self._read(source, source.path)
+        entries = self.found[id(source)].get(canonicalize_name(root), [])
+        return (entries[0][1], entries[0][2]) if len(entries) == 1 else (source.path, None)
+
     @staticmethod
     def _read(source: Source, path: Path) -> dict:
         if source.kind == "requirements":
             scanned = requirement_lines(path)
             # The scan must find the same requirements as the parser, in the same order, or no line is trusted.
+            if source.deps_paths is not None:
+                # --deps replaces source.packages with the resolved tree. Cross-check against the
+                # original requirement specs, not that tree; never infer locations from guessed text.
+                expected = [requirement_to_package(spec, source.label) for spec in source.specs]
+            else:
+                expected = source.packages
             if scanned is None or [(p.key, p.markers) for p, _, _ in scanned] != [
-                (p.key, p.markers) for p in source.packages if not p.skip
+                (p.key, p.markers) for p in expected if not p.skip
             ]:
                 return {}
             by_name: dict[str, list[tuple[Package, Path, int | None]]] = {}
@@ -302,7 +325,25 @@ def annotation(
     pkg = row.package
     name = f"{pkg.name} {pkg.version}" if pkg.version else pkg.name
     parts = [f"{GAP_WORDS[s][1]} {', '.join(by_status[s])}" for s in GAP_WORDS if s in by_status]
-    message = f"{name} {'; '.join(parts)}."
+    message = f"{name} {'; '.join(parts)}"
+    # The same direct requirement may be behind several gap targets. A source line is correct
+    # only when every gap target has exactly the same single direct parent.
+    roots = [
+        row.direct_via.get(t, ())
+        for t in targets
+        if t not in row.ignored and row.results[t] in GAP_WORDS
+    ]
+    direct = dict(
+        (canonicalize_name(parent), parent)
+        for parents in roots
+        for parent in parents
+    )
+    if direct:
+        names = list(direct.values())
+        message += f" (via {names[0]}{f' +{len(names) - 1}' if len(names) > 1 else ''})"
+    message += "."
+    if len(direct) > 1:
+        message += f" Direct dependencies: {', '.join(direct.values())}."
     if pkg.error:
         message += f" Lookup error: {pkg.error}."
     if level == "warning":
@@ -311,7 +352,11 @@ def annotation(
             message += " Source builds are allowed (fail-on missing), so this doesn't fail the run."
         else:
             message += " Gaps on advisory targets don't fail the run."
-    location = locator.locate(pkg)
+    unique = [set(canonicalize_name(p) for p in parents) for parents in roots]
+    one_root = bool(direct) and bool(unique) and all(group == set(direct) and len(group) == 1 for group in unique)
+    location = locator.locate_root(pkg, next(iter(direct.values()))) if one_root else locator.locate(pkg)
+    if direct and not one_root and location is not None:
+        location = (location[0], None)  # several possible parents: file only, never a wrong line
     file = line = None
     if location is not None:
         file = relative_path(location[0])
