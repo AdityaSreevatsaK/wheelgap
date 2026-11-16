@@ -1485,7 +1485,10 @@ def parse_requirements(path: Path) -> Source:
             for entry in entries:
                 spec &= SpecifierSet(entry.spec or "")
             pkg.spec = str(spec) or None
-        if pkg.error and pkg.error != "constraint has an environment marker; target-dependent constraints aren't supported":
+        if (
+            pkg.error
+            and pkg.error != "constraint has an environment marker; target-dependent constraints aren't supported"
+        ):
             constraint_errors[pkg.key] = pkg.error
     # A constraint on a package the file doesn't require only ever counts as a transitive dep's specifier,
     # which --deps sees; a constraint the file already called out as broken is left to constraint_errors.
@@ -1499,7 +1502,9 @@ def parse_requirements(path: Path) -> Source:
         # A bare name constrains nothing; a version or range does.
         if specifier := f"=={entry.version}" if entry.version else entry.spec:
             if entry.markers:
-                marker_constraint_specs.setdefault(entry.key, []).extend((marker, specifier) for marker in entry.markers)
+                marker_constraint_specs.setdefault(entry.key, []).extend(
+                    (marker, specifier) for marker in entry.markers
+                )
             else:
                 constraint_specs.setdefault(entry.key, set()).add(specifier)
     for pkg in pkgs:
