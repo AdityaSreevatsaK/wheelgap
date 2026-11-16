@@ -12,13 +12,15 @@ from wheelgap.sources import SourceError
 @pytest.mark.parametrize(
     "log,expected,unpinned",
     [
-        ("Collecting nowheels==0.9\nBuilding wheel for nowheels (pyproject.toml)\n"
-         "ERROR: Failed building wheel for nowheels\n", ["nowheels==0.9"], []),
+        (
+            "Collecting nowheels==0.9\nBuilding wheel for nowheels (pyproject.toml)\n"
+            "ERROR: Failed building wheel for nowheels\n",
+            ["nowheels==0.9"],
+            [],
+        ),
         ("error: Failed to build `nowheels==0.9`\n", ["nowheels==0.9"], []),
-        ("Building wheel for nowheels (pyproject.toml)\nFailed to build nowheels\n",
-         ["nowheels"], ["nowheels"]),
-        ("Collecting nowheels==0.9\nFailed to build nowheels, fastlib\n",
-         ["nowheels==0.9", "fastlib"], ["fastlib"]),
+        ("Building wheel for nowheels (pyproject.toml)\nFailed to build nowheels\n", ["nowheels"], ["nowheels"]),
+        ("Collecting nowheels==0.9\nFailed to build nowheels, fastlib\n", ["nowheels==0.9", "fastlib"], ["fastlib"]),
     ],
 )
 def test_pip_and_uv_failure_recovery(log, expected, unpinned):
@@ -43,7 +45,8 @@ def test_failed_install_log_checks_pinned_package_with_explanation(tmp_path, fak
     path = tmp_path / "failed.txt"
     path.write_text(
         "Collecting nowheels==0.9\nBuilding wheel for nowheels (pyproject.toml)\n"
-        "ERROR: Failed building wheel for nowheels\n", encoding="utf-8"
+        "ERROR: Failed building wheel for nowheels\n",
+        encoding="utf-8",
     )
     code = main(["--from-log", str(path), "-p", "3.13", "-t", "win-arm64", "--json", "--no-cache"])
     data = json.loads(capsys.readouterr().out)
