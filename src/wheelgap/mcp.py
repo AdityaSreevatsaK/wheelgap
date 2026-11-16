@@ -218,11 +218,14 @@ TOOLS: list[dict[str, Any]] = [
             "report the packages without a wheel on some target. Environment markers, .python-version and the "
             "project's [tool.wheelgap] settings (targets, python, glibc, ignore, offline, index-url, ...) apply; "
             "arguments given here override them, except that offline = true in the project can't be turned off. "
-            "Notes and errors name command-line flags (--offline is the offline argument here). "
+            "Notes and errors name command-line flags (--offline is the offline argument here, --deps the "
+            "dependencies argument). "
             "Packages from git, paths, URLs or private indexes are listed under "
             "'skipped': they were NOT checked. 'notes' says when an answer may be incomplete. Requirements files are "
             "looked up on the index; with dependencies: true, requirements files and pyproject.toml are resolved "
-            "per target and all dependencies checked, as --deps does (not supported for lockfiles or offline). "
+            "per target and all dependencies checked, as --deps does, and each gap gets via (the path to it from "
+            "a direct dependency on each gap target) and direct; refused where --deps refuses: lockfiles, offline "
+            "and another index. "
             "'ok' is true only when no package has a gap; 'passes' is the command line's "
             "verdict (exit code 0), which also accepts gaps on the project's advisory targets (listed in 'advisory'; "
             "each gap's 'advisory_gaps' says which of its 'gaps' are on them) and, with fail-on = \"missing\", "
@@ -260,7 +263,7 @@ TOOLS: list[dict[str, Any]] = [
                 "dependencies": {
                     "type": "boolean",
                     "description": "Also resolve transitive dependencies of requirements files and pyproject.toml, "
-                    "as --deps does. Default: false. Not supported for lockfiles or offline.",
+                    "as --deps does. Default: false. Refused for lockfiles, offline and another index.",
                 },
             },
             "required": ["path"],
@@ -590,9 +593,10 @@ def _check_lockfile(args: dict[str, Any]) -> dict[str, Any]:
     if offline:
         argv.append("--offline")
     if dependencies:
-        # The CLI writes a gap's 'via' only under --explain. Avoid --deps' automatic
-        # release suggestions; the MCP tool needs the paths, not extra release lookups.
-        argv += ["--deps", "--explain", "--no-suggest"]
+        # The CLI writes a gap's 'via' only under --explain. Avoid --deps' automatic release suggestions and the
+        # tracker's notes (they'd send the tree's names to wheelgap.github.io); the tool needs the paths only, and
+        # _run_cli drops --explain's other keys.
+        argv += ["--deps", "--explain", "--no-suggest", "--no-notes"]
     return _run_cli(argv, path)
 
 
@@ -770,6 +774,11 @@ def _clip(text: str, limit: int = 200) -> str:
     return text if len(text) <= limit else text[: limit - 3] + "..."
 
 
+_EXPLAIN_ONLY = frozenset(
+    {"rejected", "issues_url", "notes", "build_lab", "build_requires", "conda_forge", "suggest", "last_with_wheel"}
+)
+
+
 def _run_cli(argv: list[str], path: Path, *, positional: bool = True, project: Path | None = None) -> dict[str, Any]:
     """`wheelgap ARGV -- PATH` with --json in ARGV: its result as the lockfile tools return it. positional=False
     runs `wheelgap ARGV` with no input at all (check_dist: --dist takes none) and keeps PATH in the result; the
@@ -813,7 +822,10 @@ def _run_cli(argv: list[str], path: Path, *, positional: bool = True, project: P
                 for key in ("via", "direct")
                 if key in package
             }
-            gaps.append(package | context | {"results": results, "gaps": cells, "advisory_gaps": on_advisory})
+            # --explain's other keys (rejected wheels, tracker notes, build needs...) keep the CLI's short labels and
+            # aren't part of this tool's answer.
+            kept = {k: v for k, v in package.items() if k not in _EXPLAIN_ONLY}
+            gaps.append(kept | context | {"results": results, "gaps": cells, "advisory_gaps": on_advisory})
     # A bundled build at another version still passes, as in the CLI, but a pin micropip can't install must be said.
     differs = [p for p in data["packages"] if p.get("bundled_version_differs")]
     for p in differs:

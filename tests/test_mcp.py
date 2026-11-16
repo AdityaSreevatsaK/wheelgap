@@ -424,8 +424,35 @@ def test_check_lockfile_dependencies_resolves_transitive_gaps(tmp_path):
     data = tree["result"]["structuredContent"]
     crypt = next(g for g in data["gaps"] if g["name"] == "crypt")
     assert crypt["results"]["3.14 win-arm64"] == "source"
-    assert crypt["via"]["3.14 win-arm64"] == ["app", "lib", "crypt"]
+    assert crypt["via"] == {"3.14 win-arm64": ["app", "lib", "crypt"]}
+    assert crypt["direct"] == {"3.14 win-arm64": ["app"]}  # labelled like results, as via is
+    # Only the tool's own keys: --explain's others (rejected wheels, notes...) aren't part of the answer.
+    assert not set(crypt) & {"rejected", "issues_url", "notes", "build_lab", "build_requires", "suggest"}
     assert data["ok"] is False
+
+
+@pytest.mark.usefixtures("index")
+def test_check_lockfile_dependencies_doesnt_send_names_to_the_tracker(tmp_path, monkeypatch):
+    # notes = true in the project: --explain would fetch the tracker's notes for every gap; this tool asks none.
+    (tmp_path / "pyproject.toml").write_text("[tool.wheelgap]\nnotes = true\n", encoding="utf-8")
+    (tmp_path / "requirements.txt").write_text("app==1.0\n", encoding="utf-8")
+    import wheelgap.notes
+
+    asked = []
+    monkeypatch.setattr(wheelgap.notes, "lookup", lambda names, *a, **k: asked.append(names) or ({}, {}, False))
+    (_, reply) = run(
+        init(),
+        call(
+            "check_lockfile",
+            path=str(tmp_path / "requirements.txt"),
+            python="3.14",
+            targets=["win-arm64"],
+            dependencies=True,
+        ),  # fmt: skip
+    )
+    assert reply["result"]["isError"] is False
+    assert reply["result"]["structuredContent"]["gaps"]  # the tree has a gap, so notes would have been asked for
+    assert asked == []
 
 
 @pytest.mark.parametrize("value", ["yes", 1, [], {}])
