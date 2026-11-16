@@ -20,7 +20,6 @@ from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.utils import canonicalize_name
 
 from . import __version__, cache, condaforge, origin
-from .install_log import failed_builds, read_log
 from . import notes as tracker
 from . import suggest as release_suggest
 from .api import running_python
@@ -42,6 +41,7 @@ from .constraints import write_constraints
 from .deps import Resolver, pinned_complete, resolve_deps
 from .dockerfile import DockerfileError, read_dockerfile
 from .github import github_annotations
+from .install_log import failed_builds, read_log
 from .junit import write_junit
 from .logsafe import guarded_output, write_command
 from .offline import require_offline, undo_offline
@@ -1684,7 +1684,9 @@ def _main(argv: list[str]) -> int:
                         file=sys.stderr,
                     )
         else:
-            sources = [parse_dist(Path(args.dist))] if args.dist else load_inputs(args.inputs or ["."], args.environment)
+            sources = (
+                [parse_dist(Path(args.dist))] if args.dist else load_inputs(args.inputs or ["."], args.environment)
+            )
         for source in sources:
             if source.passed_over is not None and not quiet:
                 print(
