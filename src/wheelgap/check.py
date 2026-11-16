@@ -932,6 +932,17 @@ def direct_dependencies(
     return {i: tuple(found.values()) for i, found in owners.items() if i not in direct}
 
 
+def hint_direct_dependencies(
+    source: Source, target: Target, installed: dict[int, Parent] | dict[int, list[str]]
+) -> dict[int, tuple[str, ...]]:
+    """direct_dependencies for the table's `(via ...)` hint. It's only a hint, so a lockfile shape it doesn't expect
+    must never cost the check itself: any failure means no hint."""
+    try:
+        return direct_dependencies(source, target, installed)
+    except Exception:
+        return {}
+
+
 def check(sources: list[Source], targets: list[Target]) -> list[Row]:
     rows: list[Row] = []
     for source in sources:
@@ -948,7 +959,7 @@ def check(sources: list[Source], targets: list[Target]) -> list[Row]:
         else:
             installed = None
         via_direct = (
-            {t: direct_dependencies(source, t, installed[t]) for t in targets}
+            {t: hint_direct_dependencies(source, t, installed[t]) for t in targets}
             if installed is not None and source.edges is not None
             else {}
         )

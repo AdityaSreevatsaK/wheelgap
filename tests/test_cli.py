@@ -3750,6 +3750,26 @@ def test_poetry_1x_transitive_gap_table_uses_direct_dependency(capsys, tmp_path,
     assert fake_pypi == []
 
 
+def test_a_failing_via_hint_never_costs_the_check(capsys, tmp_path, fake_pypi, monkeypatch):
+    (tmp_path / "poetry.lock").write_text(
+        '[[package]]\nname = "mcp"\nversion = "1"\n'
+        'files = [{ file = "mcp-1-py3-none-any.whl" }]\n'
+        '[package.dependencies]\ncryptography = "*"\n\n'
+        '[[package]]\nname = "cryptography"\nversion = "50.0.2"\n'
+        'files = [{ file = "cryptography-50.0.2.tar.gz" }]\n\n'
+        '[metadata]\nlock-version = "1.1"\n',
+        encoding="utf-8",
+    )
+
+    def broken(*args, **kwargs):
+        raise KeyError("a lockfile shape the hint code didn't expect")
+
+    monkeypatch.setattr("wheelgap.check.direct_dependencies", broken)
+    code, out, err = run(capsys, str(tmp_path), "-p", "3.13", "-t", "linux-x86_64", "--offline")
+    assert code == 1 and not err
+    assert "cryptography" in out and "(via" not in out
+
+
 def test_gap_directly_required_is_not_labelled_via(capsys, tmp_path, fake_pypi):
     _write_transitive_table_lock(tmp_path)
     lock = tmp_path / "uv.lock"
