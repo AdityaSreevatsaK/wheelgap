@@ -219,7 +219,9 @@ TOOLS: list[dict[str, Any]] = [
             "Notes and errors name command-line flags (--offline is the offline argument here). "
             "Packages from git, paths, URLs or private indexes are listed under "
             "'skipped': they were NOT checked. 'notes' says when an answer may be incomplete. Requirements files are "
-            "looked up on the index. 'ok' is true only when no package has a gap; 'passes' is the command line's "
+            "looked up on the index; with dependencies: true, requirements files and pyproject.toml are resolved " 
+            "per target and all dependencies checked, as --deps does (not supported for lockfiles or offline). " 
+            "'ok' is true only when no package has a gap; 'passes' is the command line's "
             "verdict (exit code 0), which also accepts gaps on the project's advisory targets (listed in 'advisory'; "
             "each gap's 'advisory_gaps' says which of its 'gaps' are on them) and, with fail-on = \"missing\", "
             "source builds. "
@@ -252,6 +254,11 @@ TOOLS: list[dict[str, Any]] = [
                 "offline": {
                     "type": "boolean",
                     "description": "Use only the files recorded in the lockfile; never contact the index.",
+                },
+                "dependencies": {
+                    "type": "boolean",
+                    "description": "Also resolve transitive dependencies of requirements files and pyproject.toml, "
+                    "as --deps does. Default: false. Not supported for lockfiles or offline.",
                 },
             },
             "required": ["path"],
@@ -522,6 +529,7 @@ def _check_package(args: dict[str, Any]) -> dict[str, Any]:
 def _check_lockfile(args: dict[str, Any]) -> dict[str, Any]:
     """Run the command line itself with --json, so config, notes and skipped packages are exactly the CLI's."""
     _check_keys("check_lockfile", args)
+    dependencies = _flag(args, "dependencies")
     raw = _string(args, "path", required=True) or ""
     offline = args.get("offline")
     if offline is not None and not isinstance(offline, bool):
@@ -539,6 +547,8 @@ def _check_lockfile(args: dict[str, Any]) -> dict[str, Any]:
         argv.append(f"--pyodide-lock={lock_spec}")
     if offline:
         argv.append("--offline")
+    if dependencies:
+        argv.append("--deps")
     return _run_cli(argv, path)
 
 
