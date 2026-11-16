@@ -5,8 +5,8 @@ from __future__ import annotations
 import re
 from urllib.parse import quote, urlsplit
 
-from . import origin
 from .check import Row
+from .origin import known_pypi, private_names
 from .sources import Source
 
 
@@ -39,7 +39,11 @@ def project_issues_url(info: object) -> str | None:
         if (url := _safe_https(urls.get(key))) is None:
             continue
         parsed = urlsplit(url)
-        if parsed.hostname != "github.com" or parsed.port not in (None, 443):
+        try:
+            valid_host = parsed.hostname == "github.com" and parsed.port in (None, 443)
+        except ValueError:
+            valid_host = False
+        if not valid_host:
             continue
         path = parsed.path.strip("/").removesuffix(".git")
         if re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", path):
@@ -61,9 +65,9 @@ def populate_issues_urls(
     records whose index metadata was fetched during the normal check can provide a URL.
     """
     source_of = {id(p): s for s in sources for source in s.packages for p in source.variants}
-    private = origin.private_names(sources, simple_index=simple_index)
+    private = private_names(sources, simple_index=simple_index)
     for row in rows:
         package = row.package
         source = source_of.get(id(package))
-        if source is None or not origin.known_pypi(package, source, simple_index=simple_index, private=private):
+        if source is None or not known_pypi(package, source, simple_index=simple_index, private=private):
             package.issues_url = None
