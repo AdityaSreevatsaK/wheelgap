@@ -2063,7 +2063,8 @@ def parse_pip_report(path: Path) -> Source:
             skip = "git"
         elif info.get("dir_info") is not None or (parsed and parsed.scheme == "file"):
             skip = "path"
-        elif entry.get("is_direct") or (url is not None and not public_file):
+        elif not public_file or entry.get("is_direct"):
+            # An absent URL gives no positive evidence this pin came from PyPI.
             skip = "url"
         if not public_file:
             public = False
