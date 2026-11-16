@@ -1,6 +1,7 @@
 import io
 import json
 import os
+import re
 import threading
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -8,6 +9,7 @@ from pathlib import Path
 import pytest
 from conftest import FAKE_INDEX
 from test_deps import index  # noqa: F401  (the fake PyPI --deps resolves against)
+from test_dist import LINUX_WHEEL, SDIST, WIN_ARM_WHEEL, dist
 
 from wheelgap import __version__, mcp
 
@@ -93,7 +95,14 @@ def test_batches_reply_with_a_list():
 def test_tools_list_has_valid_schemas():
     (_, reply) = run(init(), {"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
     tools = {t["name"]: t for t in reply["result"]["tools"]}
-    assert set(tools) == {"check_package", "check_lockfile", "check_dockerfile", "diff_lockfiles", "list_targets"}
+    assert set(tools) == {
+        "check_package",
+        "check_lockfile",
+        "check_dockerfile",
+        "check_dist",
+        "diff_lockfiles",
+        "list_targets",
+    }
     for tool in tools.values():
         assert tool["inputSchema"]["type"] == "object"
         assert tool["annotations"]["readOnlyHint"] is True
@@ -719,6 +728,205 @@ def test_check_dockerfile_directory_is_a_tool_error(fake_pypi, tmp_path, fixture
     (_, reply) = run(init(), call("check_dockerfile", dockerfile=str(tmp_path)))
     assert reply["result"]["isError"] is True
     assert "is a directory" in reply["result"]["content"][0]["text"]
+
+
+def test_check_dist_names_each_dropped_target(fake_pypi, tmp_path):
+    folder = dist(tmp_path, LINUX_WHEEL, SDIST)  # no win_arm64 wheel this time
+    (_, reply) = run(
+        init(),
+        call("check_dist", path=str(folder), python="3.13", targets=["linux-x86_64", "win-arm64"]),
+    )
+    result = reply["result"]
+    data = result["structuredContent"]
+    assert result["isError"] is False
+    assert data["dropped"] == {"3.13 win-arm64": "1.0"}
+    assert data["gaps"][0]["results"] == {"3.13 linux-x86_64": "wheel", "3.13 win-arm64": "source"}
+    assert data["ok"] is False and data["passes"] is False
+    assert data["path"] == str(folder.resolve())
+
+
+def test_check_dist_a_clean_release_passes(fake_pypi, tmp_path):
+    folder = dist(tmp_path, LINUX_WHEEL, WIN_ARM_WHEEL, SDIST)
+    (_, reply) = run(
+        init(),
+        call("check_dist", path=str(folder), python="3.13", targets=["linux-x86_64", "win-arm64"]),
+    )
+    data = reply["result"]["structuredContent"]
+    assert data["dropped"] == {} and data["gaps"] == []
+    assert data["ok"] is True and data["passes"] is True
+
+
+def test_check_dist_a_first_release_compares_nothing(fake_pypi, tmp_path):
+    folder = dist(tmp_path, "firstpkg-1.0-cp313-cp313-manylinux_2_17_x86_64.whl")
+    (_, reply) = run(init(), call("check_dist", path=str(folder), python="3.13", targets=["linux-x86_64"]))
+    data = reply["result"]["structuredContent"]
+    assert data["dropped"] == {}
+    assert data["ok"] is True
+    assert any("no earlier release" in note for note in data["notes"])
+
+
+@pytest.mark.parametrize("force_color", [False, True])
+def test_check_dist_ok_is_false_when_the_comparison_didnt_run(fake_pypi, tmp_path, monkeypatch, force_color):
+    # The index lookup failing must not read as "nothing dropped"; and with FORCE_COLOR set in the server's
+    # environment, the note saying so must still reach notes (a dimmed line wouldn't start "wheelgap: ").
+    if force_color:
+        monkeypatch.setenv("FORCE_COLOR", "1")
+    monkeypatch.setattr(mcp.pypi, "fetch_json", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("down")))
+    folder = dist(tmp_path, LINUX_WHEEL, WIN_ARM_WHEEL, SDIST)
+    (_, reply) = run(
+        init(),
+        call("check_dist", path=str(folder), python="3.13", targets=["linux-x86_64", "win-arm64"]),
+    )
+    data = reply["result"]["structuredContent"]
+    assert "dropped" not in data
+    assert data["ok"] is False  # not a guess
+    assert data["passes"] is True  # the gate itself passed; only the comparison didn't run
+    assert any("dropped-target check didn't run" in note for note in data["notes"])
+
+
+def test_check_dist_reads_the_config_beside_the_dist_folder_not_the_servers(fake_pypi, tmp_path, monkeypatch):
+    # The server runs in another project whose config makes win-arm64 advisory: that must not hide this drop.
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "pyproject.toml").write_text('[tool.wheelgap]\nadvisory = ["win-arm64"]\n', encoding="utf-8")
+    monkeypatch.chdir(elsewhere)
+    folder = dist(tmp_path, LINUX_WHEEL, SDIST)  # no win_arm64 wheel this time
+    (_, reply) = run(
+        init(),
+        call("check_dist", path=str(folder), python="3.13", targets=["linux-x86_64", "win-arm64"]),
+    )
+    data = reply["result"]["structuredContent"]
+    assert data["dropped"] == {"3.13 win-arm64": "1.0"}
+    assert data["advisory"] == []
+    assert data["ok"] is False
+
+
+def test_check_dist_a_dotdot_path_doesnt_reach_the_servers_project(fake_pypi, tmp_path, monkeypatch):
+    # app/../legacy/dist: walking the path's text would pass through app/ and take the server's config.
+    app = tmp_path / "app"
+    app.mkdir()
+    (app / "pyproject.toml").write_text('[tool.wheelgap]\nadvisory = ["win-arm64"]\n', encoding="utf-8")
+    monkeypatch.chdir(app)
+    folder = tmp_path / "legacy" / "dist"
+    folder.mkdir(parents=True)
+    for name in (LINUX_WHEEL, SDIST):
+        (folder / name).write_bytes(b"")
+    (_, reply) = run(
+        init(),
+        call(
+            "check_dist", path=str(app / ".." / "legacy" / "dist"), python="3.13", targets=["linux-x86_64", "win-arm64"]
+        ),
+    )
+    data = reply["result"]["structuredContent"]
+    assert data["advisory"] == []
+    assert data["dropped"] == {"3.13 win-arm64": "1.0"}
+    assert data["ok"] is False
+
+
+def test_check_dist_applies_its_own_projects_config(fake_pypi, tmp_path, monkeypatch):
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.wheelgap]\npython = ["3.13"]\ntargets = ["linux-x86_64", "win-arm64"]\nadvisory = ["win-arm64"]\n',
+        encoding="utf-8",
+    )
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    folder = dist(tmp_path, LINUX_WHEEL, SDIST)
+    (_, reply) = run(init(), call("check_dist", path=str(folder)))
+    data = reply["result"]["structuredContent"]
+    assert data["targets"] == ["3.13 linux-x86_64", "3.13 win-arm64"]
+    assert data["dropped"] == {}  # an advisory target is never a drop
+    assert data["ok"] is False and data["passes"] is True  # its source build is still a gap; it just doesn't fail
+
+
+def test_check_dist_a_source_build_is_not_ok(fake_pypi, tmp_path):
+    # macOS only has the sdist to build from: wheelgap doesn't know it builds, so ok is false, as in the other tools.
+    folder = dist(tmp_path, LINUX_WHEEL, SDIST)
+    (_, reply) = run(
+        init(), call("check_dist", path=str(folder), python="3.13", targets=["linux-x86_64", "macos-arm64"])
+    )
+    data = reply["result"]["structuredContent"]
+    assert data["dropped"] == {}
+    assert data["gaps"][0]["gaps"] == ["3.13 macos-arm64"]
+    assert data["ok"] is False and data["passes"] is False
+
+
+def test_check_dist_a_missing_wheel_is_not_ok(fake_pypi, tmp_path):
+    folder = dist(tmp_path, "firstpkg-1.0-cp313-cp313-manylinux_2_17_x86_64.whl")  # no sdist
+    (_, reply) = run(init(), call("check_dist", path=str(folder), python="3.13", targets=["linux-x86_64", "win-amd64"]))
+    data = reply["result"]["structuredContent"]
+    assert data["dropped"] == {}
+    assert data["gaps"][0]["results"]["3.13 win-amd64"] == "missing"
+    assert data["ok"] is False
+
+
+def test_check_dist_an_ignored_targets_gap_is_ok(fake_pypi, tmp_path):
+    # Pyodide can't build the sdist (missing), but that target is ignored.
+    (tmp_path / "pyproject.toml").write_text('[tool.wheelgap]\nignore = ["distpkg:pyodide"]\n', encoding="utf-8")
+    folder = dist(tmp_path, LINUX_WHEEL, SDIST)
+    (_, reply) = run(
+        init(),
+        call("check_dist", path=str(folder), python="3.13", targets=["linux-x86_64", "pyodide"]),
+    )
+    data = reply["result"]["structuredContent"]
+    assert data["gaps"] == [] and data["dropped"] == {}
+    assert data["ok"] is True
+
+
+def test_check_dist_finds_the_project_above_a_nested_build_folder(fake_pypi, tmp_path, monkeypatch):
+    # maturin leaves wheels in target/wheels: the settings are two folders up, not in target/.
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.wheelgap]\npython = ["3.13"]\ntargets = ["linux-x86_64", "win-arm64"]\n', encoding="utf-8"
+    )
+    folder = tmp_path / "target" / "wheels"
+    folder.mkdir(parents=True)
+    for name in (LINUX_WHEEL, SDIST):
+        (folder / name).write_bytes(b"")
+    monkeypatch.chdir(tmp_path / "target")
+    (_, reply) = run(init(), call("check_dist", path=str(folder)))
+    data = reply["result"]["structuredContent"]
+    assert data["targets"] == ["3.13 linux-x86_64", "3.13 win-arm64"]
+    assert data["dropped"] == {"3.13 win-arm64": "1.0"}
+    assert data["ok"] is False
+
+
+def test_check_dist_takes_a_file_uri(fake_pypi, tmp_path):
+    folder = dist(tmp_path, LINUX_WHEEL, WIN_ARM_WHEEL, SDIST)
+    (_, reply) = run(
+        init(),
+        call("check_dist", path=folder.resolve().as_uri(), python="3.13", targets=["linux-x86_64"]),
+    )
+    assert reply["result"]["isError"] is False
+    assert reply["result"]["structuredContent"]["ok"] is True
+
+
+@pytest.mark.parametrize(
+    ("path", "message"),
+    [
+        ("missing", "no such file or directory"),
+        ("file", "is not a folder"),
+    ],
+)
+def test_check_dist_path_errors(fake_pypi, tmp_path, path, message):
+    if path == "file":
+        (tmp_path / "file").write_text("x", encoding="utf-8")
+    (_, reply) = run(init(), call("check_dist", path=str(tmp_path / path)))
+    assert reply["result"]["isError"] is True
+    assert message in reply["result"]["content"][0]["text"]
+
+
+def test_check_dist_a_mixed_folder_is_a_tool_error(fake_pypi, tmp_path):
+    folder = dist(tmp_path, "a-1.0-py3-none-any.whl", "b-1.0-py3-none-any.whl")
+    (_, reply) = run(init(), call("check_dist", path=str(folder)))
+    assert reply["result"]["isError"] is True
+    assert "more than one project" in reply["result"]["content"][0]["text"]
+
+
+def test_check_dist_rejects_unknown_arguments(fake_pypi, tmp_path):
+    folder = dist(tmp_path, LINUX_WHEEL, SDIST)
+    (_, reply) = run(init(), call("check_dist", path=str(folder), platform=["linux"]))
+    assert reply["result"]["isError"] is True
+    assert "unknown argument(s): platform" in reply["result"]["content"][0]["text"]
 
 
 def test_check_package_pyodide_lock_marks_bundled(fake_pypi, fixtures):
@@ -1602,6 +1810,17 @@ def test_mcp_docs_name_every_tool():
     text = (Path(__file__).resolve().parent.parent / "docs" / "mcp.md").read_text(encoding="utf-8")
     for tool in mcp.TOOLS:
         assert f"`{tool['name']}`" in text
+
+
+def test_mcp_docs_name_every_tool_argument():
+    """docs/mcp.md lists exactly the arguments each tool's inputSchema accepts in that tool's own table, so a new one
+    can't go undocumented, a removed one can't stay, and one tool's row can't stand in for another's."""
+    text = (Path(__file__).resolve().parent.parent / "docs" / "mcp.md").read_text(encoding="utf-8")
+    sections = dict(re.findall(r"^#### `(\w+)`\n(.*?)(?=^#|\Z)", text, re.M | re.S))
+    assert set(sections) == {tool["name"] for tool in mcp.TOOLS}
+    for tool in mcp.TOOLS:
+        documented = set(re.findall(r"^\| `(\w+)` \|", sections[tool["name"]], re.M))
+        assert documented == set(tool["inputSchema"]["properties"]), tool["name"]
 
 
 # The 2026-07-28 revision: no handshake; every request carries its version and the client's capabilities in _meta.
