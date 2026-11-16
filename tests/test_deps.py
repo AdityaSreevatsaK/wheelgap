@@ -828,3 +828,17 @@ def test_deps_github_annotations_multiple_parents_never_guess_line(index, capsys
     assert "Direct dependencies: parenta, parentb." in output
     assert "(via parenta +1)" in output
     assert "file=requirements.txt,line=" not in output
+
+
+def test_deps_github_annotations_pyproject_never_guesses_a_line(index, capsys, tmp_path, monkeypatch):
+    project = tmp_path / "pyproject.toml"
+    project.write_text(
+        '[project]\nname = "sample"\nversion = "1.0"\ndependencies = ["app==1.0"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("GITHUB_WORKSPACE", str(tmp_path))
+    code = main([str(project), "--deps", "--github-annotations", "-p", "3.14", "-t", "win-arm64", "--no-cache"])
+    output = capsys.readouterr().out
+    assert code == 1
+    assert "::error file=pyproject.toml,title=crypt 1.0%3A builds from source::" in output
+    assert "file=pyproject.toml,line=" not in output
