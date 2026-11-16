@@ -794,3 +794,37 @@ def test_deps_json_explain_direct_extra_only_names_the_requester(index, capsys):
     assert code == 1
     crypt = next(p for p in output["packages"] if p["name"] == "crypt")
     assert crypt["direct"] == {"win-arm64": ["app"]}
+
+
+def test_deps_github_annotations_resolved_direct_requirement_has_line(index, capsys, tmp_path, monkeypatch):
+    path = tmp_path / "requirements.txt"
+    path.write_text("crypt==1.0\n", encoding="utf-8")
+    monkeypatch.setenv("GITHUB_WORKSPACE", str(tmp_path))
+    code = main([str(path), "--deps", "--github-annotations", "-p", "3.14", "-t", "win-arm64", "--no-cache"])
+    output = capsys.readouterr().out
+    assert code == 1
+    assert "::error file=requirements.txt,line=1,title=crypt 1.0%3A builds from source::" in output
+
+
+def test_deps_github_annotations_transitive_gap_uses_root_line(index, capsys, tmp_path, monkeypatch):
+    path = tmp_path / "requirements.txt"
+    path.write_text("# top-level requirement\napp==1.0\n", encoding="utf-8")
+    monkeypatch.setenv("GITHUB_WORKSPACE", str(tmp_path))
+    code = main([str(path), "--deps", "--github-annotations", "-p", "3.14", "-t", "win-arm64", "--no-cache"])
+    output = capsys.readouterr().out
+    assert code == 1
+    assert "::error file=requirements.txt,line=2,title=crypt 1.0%3A builds from source::" in output
+    assert "crypt 1.0 builds from source on win-arm64 (via app)." in output
+
+
+def test_deps_github_annotations_multiple_parents_never_guess_line(index, capsys, tmp_path, monkeypatch):
+    path = tmp_path / "requirements.txt"
+    path.write_text("parenta==1.0\nparentb==1.0\n", encoding="utf-8")
+    monkeypatch.setenv("GITHUB_WORKSPACE", str(tmp_path))
+    code = main([str(path), "--deps", "--github-annotations", "-p", "3.14", "-t", "win-arm64", "--no-cache"])
+    output = capsys.readouterr().out
+    assert code == 1
+    assert "::error file=requirements.txt,title=crypt 1.0%3A builds from source::" in output
+    assert "Direct dependencies: parenta, parentb." in output
+    assert "(via parenta +1)" in output
+    assert "file=requirements.txt,line=" not in output
