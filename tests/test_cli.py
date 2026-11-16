@@ -3726,3 +3726,33 @@ def test_transitive_gap_table_no_graph_quiet_and_json_unchanged(capsys, tmp_path
     code, out, _ = run(capsys, "nowheels", "-p", "3.13", "-t", "linux-x86_64")
     assert code == 1 and "nowheels" in out and "(via " not in out
     assert fake_pypi == ["https://pypi.org/pypi/nowheels/json"]
+
+def test_poetry_1x_transitive_gap_table_uses_direct_dependency(capsys, tmp_path, fake_pypi):
+    (tmp_path / "poetry.lock").write_text(
+        '[[package]]\nname = "mcp"\nversion = "1"\n'
+        'files = [{ file = "mcp-1-py3-none-any.whl" }]\n'
+        '[package.dependencies]\ncryptography = "*"\n\n'
+        '[[package]]\nname = "cryptography"\nversion = "50.0.2"\n'
+        'files = [{ file = "cryptography-50.0.2.tar.gz" }]\n\n'
+        '[metadata]\nlock-version = "1.1"\n',
+        encoding="utf-8",
+    )
+    code, out, err = run(capsys, str(tmp_path), "-p", "3.13", "-t", "linux-x86_64", "--offline")
+    assert code == 1 and not err
+    assert "cryptography (via mcp)" in out
+    assert fake_pypi == []
+
+
+def test_gap_directly_required_is_not_labelled_via(capsys, tmp_path, fake_pypi):
+    _write_transitive_table_lock(tmp_path)
+    lock = tmp_path / "uv.lock"
+    lock.write_text(
+        lock.read_text(encoding="utf-8").replace(
+            'dependencies = [{ name = "mcp" }]',
+            'dependencies = [{ name = "mcp" }, { name = "cryptography" }]',
+        ),
+        encoding="utf-8",
+    )
+    code, out, _ = run(capsys, str(tmp_path), "-p", "3.13", "-t", "linux-x86_64", "--offline")
+    assert code == 1 and "cryptography" in out and "cryptography (via" not in out
+    assert fake_pypi == []
