@@ -263,9 +263,7 @@ def test_junit_ignored_beats_advisory(capsys, fixtures, tmp_path):
 
 def test_junit_transitive_gap_names_its_direct_dependency(capsys, fixtures, tmp_path, fake_pypi):
     report = tmp_path / "with-graph.xml"
-    code, _, err = run(
-        capsys, str(fixtures / "uvproj"), "-p", "3.13", "-t", "linux-x86_64", "--junit", str(report)
-    )
+    code, _, err = run(capsys, str(fixtures / "uvproj"), "-p", "3.13", "-t", "linux-x86_64", "--junit", str(report))
     assert code == 1, err
     suite = _suites(report)["linux-x86_64"]
     transitive = _case(suite, "nativeext")
@@ -279,17 +277,15 @@ def test_junit_transitive_gap_names_its_direct_dependency(capsys, fixtures, tmp_
 
     # A bare requirements file has no dependency graph to annotate.
     requirements = tmp_path / "requirements.txt"
-    requirements.write_text("puresdist==1.0\n", encoding="utf-8")
+    requirements.write_text("nowheels==0.9\n", encoding="utf-8")
     code, _, err = run(capsys, str(requirements), "-p", "3.13", "-t", "linux-x86_64", "--junit", str(report))
     assert code == 1, err
-    assert _case(_suites(report)["linux-x86_64"], "puresdist").find("failure").get("message") == "source"
+    assert _case(_suites(report)["linux-x86_64"], "nowheels").find("failure").get("message") == "source"
 
 
 def test_junit_origin_belongs_to_winning_cell_and_all_direct_parents_are_listed():
     (target,) = build_targets(["3.13"], ["win-arm64"])
-    source = Row(
-        Package("nativeext", "1.0"), {target: Status.SOURCE}, direct_via={target: ("old-parent",)}
-    )
+    source = Row(Package("nativeext", "1.0"), {target: Status.SOURCE}, direct_via={target: ("old-parent",)})
     missing = Row(
         Package("nativeext", "1.0"),
         {target: Status.MISSING},
@@ -303,9 +299,7 @@ def test_junit_origin_belongs_to_winning_cell_and_all_direct_parents_are_listed(
         assert failure.get("message") == "missing (via app +2)"
         assert failure.text == "missing (via app +2)\nDirect dependencies: app, mcp, third"
 
-    (suite,) = ET.fromstring(
-        junit_xml([source], [target], "source", frozenset({target}))
-    ).findall("testsuite")
+    (suite,) = ET.fromstring(junit_xml([source], [target], "source", frozenset({target}))).findall("testsuite")
     advisory = suite.find("testcase/skipped")
     assert advisory is not None
     assert advisory.get("message") == "advisory: source (via old-parent)"
