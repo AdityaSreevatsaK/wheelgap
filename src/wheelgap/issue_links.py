@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from urllib.parse import quote, urlsplit
 
-from . import origin, pypi
+from . import origin
 from .check import Row
 from .sources import Source
 
@@ -55,20 +55,15 @@ def markdown_link(url: str) -> str:
 def populate_issues_urls(
     rows: list[Row], sources: list[Source], *, simple_index: str | None = None
 ) -> None:
-    """Look up PyPI issue trackers only for positively public packages with gaps."""
+    """Use metadata from existing PyPI lookups; do not change --explain's network behaviour.
+
+    A lockfile's stored wheels already explain the gaps without contacting PyPI, so only
+    records whose index metadata was fetched during the normal check can provide a URL.
+    """
     source_of = {id(p): s for s in sources for source in s.packages for p in source.variants}
     private = origin.private_names(sources, simple_index=simple_index)
-    memo: dict[str, str | None] = {}
     for row in rows:
         package = row.package
         source = source_of.get(id(package))
         if source is None or not origin.known_pypi(package, source, simple_index=simple_index, private=private):
-            continue
-        if package.key not in memo:
-            try:
-                data = pypi.fetch_json(f"{pypi.index_url()}/{quote(package.key)}/json")
-                info = data.get("info") if isinstance(data, dict) else None
-                memo[package.key] = project_issues_url(info)
-            except (OSError, ValueError, TypeError, KeyError):
-                memo[package.key] = None  # Optional link: network errors must not alter gap results.
-        package.issues_url = memo[package.key]
+            package.issues_url = None
