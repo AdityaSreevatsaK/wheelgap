@@ -86,6 +86,8 @@ class Package:
     only_binary: bool = False
     # The relevant uv setting(s), used to explain a gap caused by the configured policy.
     install_policy: str | None = None
+    # --explain: optional public PyPI issue tracker URL (not part of package status).
+    issues_url: str | None = None
 
     @property
     def key(self) -> str:
