@@ -3706,7 +3706,10 @@ def test_transitive_gap_table_counts_distinct_direct_parents(capsys, tmp_path, f
 
 def test_transitive_gap_table_respects_marker_and_selected_graph(capsys, tmp_path, fake_pypi):
     _write_transitive_table_lock(tmp_path, marked=True)
-    for target, expected in (("linux-x86_64", "cryptography (via mcp)"), ("win-amd64", "cryptography (via mcp +1)")):
+    for target, expected in (
+        ("linux-x86_64", "cryptography (via mcp)"),
+        ("win-amd64", "cryptography (via platformer +1)"),
+    ):
         code, out, err = run(capsys, str(tmp_path), "-p", "3.13", "-t", target, "--no-dev", "--offline")
         assert code == 1 and not err
         assert expected in out
