@@ -738,7 +738,14 @@ def _run_cli(argv: list[str], path: Path) -> dict[str, Any]:
         if cells:
             results = {label[cell]: status for cell, status in package["results"].items()}
             on_advisory = [cell for cell in cells if cell in advisory]
-            gaps.append(package | {"results": results, "gaps": cells, "advisory_gaps": on_advisory})
+            # The CLI omits the Python prefix with one Python; MCP always includes it.
+            # Apply the same label mapping to dependency paths, not just status cells.
+            context = {
+                key: {label.get(t, t): value for t, value in package[key].items()}
+                for key in ("via", "direct")
+                if key in package
+            }
+            gaps.append(package | context | {"results": results, "gaps": cells, "advisory_gaps": on_advisory})
     # A bundled build at another version still passes, as in the CLI, but a pin micropip can't install must be said.
     differs = [p for p in data["packages"] if p.get("bundled_version_differs")]
     for p in differs:
