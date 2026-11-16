@@ -126,6 +126,7 @@ for `check_dist` the nearest folder above the dist folder with a
 | `macos` | string | `[tool.wheelgap] macos`, else `14.0` | Oldest macOS version to support. |
 | `pyodide_lock` | string | `[tool.wheelgap] pyodide-lock` (when a pyodide target is checked) | Absolute path or https URL of a Pyodide release's `pyodide-lock.json`. |
 | `offline` | boolean | `[tool.wheelgap] offline`, else `false` | Use only the files recorded in the lockfile; never contact the index. `true` turns it on; `offline = true` in the project can't be turned off from here. |
+| `dependencies` | boolean | `false` | Resolve transitive dependencies of requirements files and `pyproject.toml` with `--deps`, returning their gap paths. Refused for lockfiles and offline resolution. |
 
 #### `check_dockerfile`
 
