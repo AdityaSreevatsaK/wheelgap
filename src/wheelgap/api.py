@@ -24,7 +24,7 @@ from typing import ClassVar, Literal, overload
 
 from . import origin, pypi
 from .check import Row, Status, check, explain, explain_lines, status_for, wheel_tags
-from .deps import resolve_deps
+from .deps import Resolver, pinned_complete, resolve_deps
 from .offline import require_offline
 from .pyodide import PyodideLock, bundled_version_differs, bundles, check_locks
 from .pypi import fill_all, recheck_lock
@@ -400,6 +400,7 @@ def check_lockfile(
     offline: bool = False,
     pyodide_locks: Iterable[PyodideLock] = (),
     environment: str | None = None,
+    deps: bool = False,
 ) -> list[Result]:
     """Check every package a lockfile (or a project directory) installs on at least one target.
 
@@ -411,6 +412,10 @@ def check_lockfile(
     With offline=True, only locked files are used: inputs needing an index lookup raise SourceError, and the
     other-Python recheck is skipped. Locked files may therefore omit wheels for those Python versions.
     online=True and offline=True cannot be combined.
+    deps=True resolves a requirements file or pyproject.toml's whole dependency tree per target, with the
+    same index, marker, constraint and binary-policy refusals as the CLI's --deps. It cannot be combined with
+    offline=True or an existing lockfile; unsettled trees raise DepsError instead of returning partial results.
+    A project directory with no lockfile may supply pyproject.toml with deps=True.
     pyodide_locks work as in check_packages(), and are checked before the lockfile is read.
     environment picks a pixi.lock environment (default: `default`); in a project directory it makes pixi.lock the
     lockfile read. Naming one for any other lockfile raises SourceError.
@@ -418,7 +423,8 @@ def check_lockfile(
     SourceError unless every target matches that environment's platform, machine, Python and implementation.
     """
     return _check_lockfile(
-        path, targets, online=online, offline=offline, pyodide_locks=pyodide_locks, environment=environment
+        path, targets, online=online, offline=offline, pyodide_locks=pyodide_locks, environment=environment,
+        deps=deps,
     )[0]
 
 
@@ -430,6 +436,7 @@ def _check_lockfile(
     offline: bool,
     pyodide_locks: Iterable[PyodideLock] = (),
     environment: str | None = None,
+    deps: bool = False,
 ) -> tuple[list[Result], Source, list[Row]]:
     """check_lockfile(), also returning the source and check rows for diff's skips and suggestions."""
     targets = _package_targets(targets)
@@ -438,8 +445,16 @@ def _check_lockfile(
         raise ValueError("online=True and offline=True cannot be combined")
     check_locks(pyodide_locks, targets)
     p = Path(path)
-    lockfile = find_lockfile(p, environment is not None) if p.is_dir() else p
-    if lockfile.name == "pyproject.toml":  # direct dependencies only; the command line says so in a note
+    if p.is_dir():
+        try:
+            lockfile = find_lockfile(p, environment is not None)
+        except SourceError:
+            if not deps or not (p / "pyproject.toml").is_file():
+                raise
+            lockfile = p / "pyproject.toml"
+    else:
+        lockfile = p
+    if lockfile.name == "pyproject.toml" and not deps:
         raise SourceError(
             f"{lockfile}: a pyproject.toml lists direct dependencies only, so check_lockfile() and "
             "wheelgap.diff don't read it; pass a lockfile (the wheelgap command checks a pyproject.toml)"
@@ -448,10 +463,35 @@ def _check_lockfile(
     if environment is not None and source.kind != "pixi":
         raise SourceError(f"{lockfile}: environment applies to pixi.lock only")
     check_report_targets(source, targets)
+    if deps:
+        if source.kind not in ("requirements", "pyproject"):
+            raise SourceError(
+                "--deps applies to requirements files or pyproject.toml; "
+                "a lockfile already lists what it installs"
+            )
+        if offline:
+            raise SourceError("offline=True: --deps would look packages up on PyPI; set offline=False")
+        if not source.pypi_only:
+            raise SourceError(
+                f"{source.label}: the project configures an installer index or source; "
+                "--deps uses only PyPI, so check a lockfile instead"
+            )
+        if (env := origin.index_env()) is not None:
+            raise SourceError(
+                f"{source.label}: {env} may point pip or uv at another index, and --deps uses only PyPI, "
+                "so check a lockfile instead"
+            )
+        if source.deps_blockers:
+            raise SourceError(
+                f"{source.label}: --deps can't follow this the way pip does ({source.deps_blockers[0]}), "
+                "so check a lockfile instead (pip-compile, or uv pip compile)"
+            )
+        if not pinned_complete(source):
+            resolve_deps(source, list(targets), Resolver())
     if offline:
         require_offline([source], "offline=True", undo="set offline=False")
     fill_all(source.packages, refresh=online, pythons=tuple(dict.fromkeys(f"{t.major}.{t.minor}" for t in targets)))
-    if not online and not offline and pythons_outside_lock(source, targets):
+    if not deps and not online and not offline and pythons_outside_lock(source, targets):
         recheck_lock(source.packages)
     rows: list[Row] = [r for r in check([source], targets) if r.needed]
     issues = explain_issues_urls(rows, [source])
