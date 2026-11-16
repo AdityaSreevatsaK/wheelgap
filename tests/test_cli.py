@@ -1758,8 +1758,12 @@ def test_ignored_missing_with_counted_source_passes_fail_on_missing(capsys, fixt
     assert "2 of 5 packages have gaps: 2 will build from source." in out
     assert "can't install" not in out
     assert "Source builds are allowed (--fail-on missing), so this run passes." in out
-    assert "purewheel  3.1      ✓             ✓\n" in out  # a wheel on an ignored target isn't marked
-    assert "puresdist  1.0      ● source      ✗ missing (ignored)\n" in out
+    # The added "via" hints widen the package column; assert cells rather than fixed padding.
+    assert any(line.split() == ["purewheel", "3.1", "✓", "✓"] for line in out.splitlines())
+    assert any(
+        line.split() == ["puresdist", "1.0", "●", "source", "✗", "missing", "(ignored)"]
+        for line in out.splitlines()
+    )
 
 
 def test_cell_marks_only_ignored_gaps():
@@ -3660,9 +3664,9 @@ def _write_transitive_table_lock(tmp_path, *, several=False, marked=False):
     if marked:
         deps.append('{ name = "platformer", marker = "sys_platform == \'win32\'" }')
     text = (
-        'version = 1\n'
+        "version = 1\n"
         '[[package]]\nname = "app"\nversion = "1"\nsource = { editable = "." }\n'
-        f'dependencies = [{", ".join(deps)}]\n'
+        f"dependencies = [{', '.join(deps)}]\n"
     )
     for name in ("mcp", "requests", "click", "platformer"):
         if name != "mcp" and not (several or (marked and name == "platformer")):
@@ -3708,7 +3712,7 @@ def test_transitive_gap_table_respects_marker_and_selected_graph(capsys, tmp_pat
     _write_transitive_table_lock(tmp_path, marked=True)
     for target, expected in (
         ("linux-x86_64", "cryptography (via mcp)"),
-        ("win-amd64", "cryptography (via platformer +1)"),
+        ("win-amd64", "cryptography (via mcp +1)"),
     ):
         code, out, err = run(capsys, str(tmp_path), "-p", "3.13", "-t", target, "--no-dev", "--offline")
         assert code == 1 and not err
@@ -3729,6 +3733,7 @@ def test_transitive_gap_table_no_graph_quiet_and_json_unchanged(capsys, tmp_path
     code, out, _ = run(capsys, "nowheels", "-p", "3.13", "-t", "linux-x86_64")
     assert code == 1 and "nowheels" in out and "(via " not in out
     assert fake_pypi == ["https://pypi.org/pypi/nowheels/json"]
+
 
 def test_poetry_1x_transitive_gap_table_uses_direct_dependency(capsys, tmp_path, fake_pypi):
     (tmp_path / "poetry.lock").write_text(
@@ -3763,7 +3768,7 @@ def test_gap_directly_required_is_not_labelled_via(capsys, tmp_path, fake_pypi):
 
 def test_selected_uv_extra_is_attributed_only_to_the_direct_requester(capsys, tmp_path, fake_pypi):
     (tmp_path / "uv.lock").write_text(
-        'version = 1\n'
+        "version = 1\n"
         '[[package]]\nname = "app"\nversion = "1"\nsource = { editable = "." }\n'
         'dependencies = [{ name = "mcp" }, { name = "plain" }]\n'
         '[[package]]\nname = "mcp"\nversion = "1"\nsource = { registry = "https://pypi.org/simple" }\n'
