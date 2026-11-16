@@ -14,9 +14,7 @@ MAX_LOG_BYTES = 1024 * 1024
 
 # Version pins appear in pip's preceding "Collecting" and wheel-building progress messages.
 _COLLECT = re.compile(r"\bCollecting\s+([A-Za-z0-9][A-Za-z0-9._-]*)(?:==([A-Za-z0-9][A-Za-z0-9._+!-]*))?", re.I)
-_BUILD = re.compile(
-    r"\bBuilding wheel for\s+([A-Za-z0-9][A-Za-z0-9._-]*)(?:\s*\([^\n]*?\))?", re.I
-)
+_BUILD = re.compile(r"\bBuilding wheel for\s+([A-Za-z0-9][A-Za-z0-9._-]*)(?:\s*\([^\n]*?\))?", re.I)
 _PIP_ERROR = re.compile(r"(?:ERROR:\s*)?Failed building wheel for\s+(.+)$", re.I)
 _PIP_SUMMARY = re.compile(r"^\s*(?:ERROR:\s*)?Failed to build\s+(.+)$", re.I)
 _UV_ERROR = re.compile(r"Failed to build\s+[`'\"]([^ `'\"\r\n]+)[`'\"]", re.I)
