@@ -259,3 +259,54 @@ def test_junit_ignored_beats_advisory(capsys, fixtures, tmp_path):
     # An ignored gap is accepted outright, so it says so rather than reporting it as an advisory gap.
     assert _case(musl, "armlib").find("skipped").get("message") == "ignored"
     assert _case(musl, "newglibc").find("skipped").get("message") == "advisory: missing"
+
+
+def test_junit_transitive_gap_names_its_direct_dependency(capsys, fixtures, tmp_path, fake_pypi):
+    report = tmp_path / "with-graph.xml"
+    code, _, err = run(
+        capsys, str(fixtures / "uvproj"), "-p", "3.13", "-t", "linux-x86_64", "--junit", str(report)
+    )
+    assert code == 1, err
+    suite = _suites(report)["linux-x86_64"]
+    transitive = _case(suite, "nativeext")
+    failure = transitive.find("failure")
+    assert failure is not None
+    assert failure.get("message") == "source (via fastlib)"
+    assert "Direct dependencies: fastlib" in failure.text
+    assert transitive.get("name") == "nativeext"  # stable dashboard identity
+    # puresdist is a direct dependency, so no via hint is added.
+    assert _case(suite, "puresdist").find("failure").get("message") == "source"
+
+    # A bare requirements file has no dependency graph to annotate.
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("puresdist==1.0\n", encoding="utf-8")
+    code, _, err = run(capsys, str(requirements), "-p", "3.13", "-t", "linux-x86_64", "--junit", str(report))
+    assert code == 1, err
+    assert _case(_suites(report)["linux-x86_64"], "puresdist").find("failure").get("message") == "source"
+
+
+def test_junit_origin_belongs_to_winning_cell_and_all_direct_parents_are_listed():
+    (target,) = build_targets(["3.13"], ["win-arm64"])
+    source = Row(
+        Package("nativeext", "1.0"), {target: Status.SOURCE}, direct_via={target: ("old-parent",)}
+    )
+    missing = Row(
+        Package("nativeext", "1.0"),
+        {target: Status.MISSING},
+        direct_via={target: ("app", "mcp", "mcp", "third")},
+    )
+    for rows in ([source, missing], [missing, source]):
+        (suite,) = ET.fromstring(junit_xml(rows, [target], "source")).findall("testsuite")
+        (case,) = suite.findall("testcase")
+        assert case.get("name") == "nativeext"
+        failure = case.find("failure")
+        assert failure.get("message") == "missing (via app +2)"
+        assert failure.text == "missing (via app +2)\nDirect dependencies: app, mcp, third"
+
+    (suite,) = ET.fromstring(
+        junit_xml([source], [target], "source", frozenset({target}))
+    ).findall("testsuite")
+    advisory = suite.find("testcase/skipped")
+    assert advisory is not None
+    assert advisory.get("message") == "advisory: source (via old-parent)"
+    assert advisory.text == "Direct dependencies: old-parent"
