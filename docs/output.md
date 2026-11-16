@@ -406,9 +406,10 @@ report, alongside whatever output mode you use. It has one testsuite per target 
 ```
 
 - A cell that fails the run is a failure: `missing`, `unknown`, and `source` unless `--fail-on missing`.
-- For transitive gaps, failure and advisory-skip messages include the direct dependency that brought in the
-  package, e.g. `source (via mcp)` or `source (via mcp +2)`. Failure text names all those direct
-  dependencies. Testcase names stay unchanged, so dashboard history is preserved.
+- (**after 0.12.0**) A transitive gap's failure or advisory-skip message names the direct dependency that pulls it
+  in on that target, as the tables do: `source (via mcp)`, or `source (via mcp +2)`, and the element's text lists
+  them all. Only inputs with a dependency graph (uv.lock, Poetry 1.x, `--deps`) have one. Testcase names don't
+  change, so dashboard history is kept.
 - `n/a` cells are skipped, and so are gaps that `--ignore NAME:TARGET` accepts (message `ignored`).
 - A gap on an `--advisory` target is skipped with the message `advisory: source` (or `missing`,
   `unknown`), so dashboards that mark a build unstable on failed tests don't.

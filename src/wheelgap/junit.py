@@ -84,9 +84,12 @@ def junit_xml(rows: list[Row], targets: list[Target], fail_on: str, advisory: fr
             # source), then a pass, then skipped.
             if ident not in merged or _rank(cell) > _rank(merged[ident]):
                 merged[ident] = cell
-                direct_via[ident] = tuple(
-                    dict((canonicalize_name(name), name) for name in row.direct_via.get(target, ())).values()
-                )
+                # This target's own direct dependencies (not the table's union across targets), each once, spelt
+                # as first seen, as the tables spell it.
+                seen: dict[str, str] = {}
+                for name in row.direct_via.get(target, ()):
+                    seen.setdefault(canonicalize_name(name), name)
+                direct_via[ident] = tuple(seen.values())
         cases = [(names[ident], fail, skip, direct_via[ident]) for ident, (fail, skip) in merged.items()]
         failures = sum(1 for _, fail, _, _ in cases if fail is not None)
         skipped = sum(1 for _, _, skip, _ in cases if skip is not None)

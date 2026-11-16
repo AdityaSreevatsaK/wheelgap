@@ -304,3 +304,29 @@ def test_junit_origin_belongs_to_winning_cell_and_all_direct_parents_are_listed(
     assert advisory is not None
     assert advisory.get("message") == "advisory: source (via old-parent)"
     assert advisory.text == "Direct dependencies: old-parent"
+
+
+def test_junit_via_is_per_target_and_keeps_the_first_spelling():
+    linux, win = build_targets(["3.13"], ["linux-x86_64", "win-amd64"])
+    row = Row(
+        Package("cryptography", "50.0.2"),
+        {linux: Status.SOURCE, win: Status.SOURCE},
+        direct_via={linux: ("PyYAML", "pyyaml"), win: ("PyYAML", "platformer")},
+    )
+    suites = {s.get("name"): s for s in ET.fromstring(junit_xml([row], [linux, win], "source")).findall("testsuite")}
+    assert suites["linux-x86_64"].find("testcase/failure").get("message") == "source (via PyYAML)"
+    assert suites["win-amd64"].find("testcase/failure").get("message") == "source (via PyYAML +1)"
+
+
+def test_junit_ignored_gap_names_no_via():
+    (target,) = build_targets(["3.13"], ["win-arm64"])
+    row = Row(
+        Package("nativeext", "1.0"),
+        {target: Status.SOURCE},
+        ignored=frozenset({target}),
+        direct_via={target: ("app",)},
+    )
+    (suite,) = ET.fromstring(junit_xml([row], [target], "source")).findall("testsuite")
+    skipped = suite.find("testcase/skipped")
+    assert skipped.get("message") == "ignored"
+    assert skipped.text is None
