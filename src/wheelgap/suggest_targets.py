@@ -414,18 +414,11 @@ def _value(text: str, line: int) -> tuple[object, str]:
         return None, ""
     if text[0] in "'\"":
         if (m := _QUOTED_RE.match(text)) and _comment_only(text[m.end() :]):
-            _quoted_end(m.group()[1:], text[0], line)  # reject controls on single lines too
             return _Scalar(m.group()[1:-1], True, line), m.group()
         if (m := _ESCAPED_RE.match(text)) and _comment_only(text[m.end() :]):
-            _quoted_end(m.group()[1:], text[0], line)  # validate escapes on single lines too
             return _ESCAPED, m.group()
-        end = _quoted_end(text[1:], text[0], line)
-        if end is None:
+        if _quoted_end(text[1:], text[0], line) is None:
             return _OPEN_QUOTE, text
-        if _comment_only(text[end + 1 :]):
-            # A quoted value with doubled single quotes is accepted only as opaque,
-            # like its multi-line form; neither gets used to infer a target.
-            return _QUOTED_LINES, text[: end + 1]
         raise _NotRead(line, text)
     if (m := _PROPERTY_RE.match(text)) and _comment_only(text[m.end() :]):
         # An anchor on the block below (read as it is) or an alias (never read).
