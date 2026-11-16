@@ -21,6 +21,7 @@ from packaging.utils import canonicalize_name
 
 from . import __version__, cache, condaforge, origin
 from . import notes as tracker
+from . import issue_links
 from . import suggest as release_suggest
 from .api import running_python
 from .badge import write_badge
@@ -767,6 +768,8 @@ def render_explain(
                 only_binary=r.package.only_binary,
             )
             out += [f"  {line}" for line in lines]
+            if r.package.issues_url:
+                out.append(f"  ask for a wheel: {r.package.issues_url}")
             out.append("")
         if conda_forge and (h := conda_forge.get(id(r.package))):
             out += [condaforge.hint_text(r.package, h, multi_py), ""]
@@ -913,6 +916,8 @@ def report_json(
             }
             # Same targets as `rejected`, minus any without a path (inputs with no dependency graph).
             out["via"] = {t.label(multi_py): r.via[t] for t in gap_targets(r, targets) if t in r.via}
+            if r.package.issues_url:
+                out["issues_url"] = r.package.issues_url
             if conda_forge and (h := conda_forge.get(id(r.package))):
                 out["conda_forge"] = {
                     "name": h.name,
@@ -1225,6 +1230,12 @@ def render_markdown(
         lines = render_explain(gaps, targets, plain, conda_forge, notes, build_info, builds=builds)
         fence = "`" * max([3, *(len(run) + 1 for line in lines for run in re.findall(r"`+", line))])
         out += ["<details><summary>Why (rejected wheels)</summary>", "", fence, *lines, fence, "", "</details>", ""]
+        for r in gaps:
+            if r.package.issues_url:
+                url = issue_links.markdown_link(r.package.issues_url)
+                out.append(f"- Ask for a wheel for {_md(r.package.name)}: [issue tracker]({url})")
+        if any(r.package.issues_url for r in gaps):
+            out.append("")
         if suggestions:
             multi_py = len({t.python for t in targets}) > 1
             sug_lines = []
@@ -1996,6 +2007,9 @@ def _main(argv: list[str]) -> int:
                 file=sys.stderr,
             )
     conda_forge = conda_forge_hints(gaps, targets, sources, index_url, quiet, cached) if args.conda_forge else {}
+    # Only positively public PyPI packages may have their names sent for issue tracker lookup.
+    if args.explain and gaps and not offline:
+        issue_links.populate_issues_urls(gaps, sources, simple_index=index_url)
     # None: not asked for. Like the hints above, it never changes a status or the exit code.
     suggestions = version_suggestions(gaps, targets, sources, index_url, quiet) if args.suggest else None
     # With --fail-on missing, source builds are accepted; missing and unknown packages still fail. Gaps on
