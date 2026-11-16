@@ -55,6 +55,8 @@ class _Tree:
     chosen: dict[str, str] = field(default_factory=dict)  # key -> version
     errors: dict[str, str] = field(default_factory=dict)  # key -> why it has no version
     paths: dict[str, list[str]] = field(default_factory=dict)  # key -> names from a top-level requirement down
+    direct_roots: list[str] = field(default_factory=list)
+    links: dict[str, list[str]] = field(default_factory=dict)  # parent key -> dependencies reached on this target
     imposed: dict[str, set[str]] = field(default_factory=dict)  # key -> specifiers on it from installed edges
 
 
@@ -202,6 +204,13 @@ class Resolver:
             if req.marker is not None and not marker_holds(str(req.marker), target, extras=parent_extras):
                 continue
             key = canonicalize_name(req.name)
+            if path:
+                parent = canonicalize_name(path[-1])
+                links = tree.links.setdefault(parent, [])
+                if key not in links:
+                    links.append(key)
+            elif key not in tree.direct_roots:
+                tree.direct_roots.append(key)
             spec = str(req.specifier)
             tree.imposed.setdefault(key, set()).add(spec)
             wanted = frozenset(canonicalize_name(e) for e in req.extras)
@@ -325,6 +334,22 @@ def pinned_complete(source: Source) -> bool:
     )
 
 
+def _direct_roots(tree: _Tree) -> dict[str, tuple[str, ...]]:
+    """All direct requested packages that reach each transitive dependency on this target."""
+    owners: dict[str, dict[str, None]] = {}
+    queue: deque[tuple[str, str]] = deque()
+    for root in tree.direct_roots:
+        owners.setdefault(root, {})[root] = None
+        queue.append((root, root))
+    while queue:
+        name, root = queue.popleft()
+        for dependency in tree.links.get(name, []):
+            if root not in owners.setdefault(dependency, {}):
+                owners[dependency][root] = None
+                queue.append((dependency, root))
+    return {key: tuple(roots) for key, roots in owners.items() if key not in tree.direct_roots}
+
+
 def resolve_deps(source: Source, targets: list[Target], resolver: Resolver | None = None) -> None:
     """Replace the source's packages with what its requirements install on each target."""
     resolver = resolver or Resolver()
@@ -335,9 +360,12 @@ def resolve_deps(source: Source, targets: list[Target], resolver: Resolver | Non
     packages: list[Package] = list(kept)
     index: dict[tuple[str, str | None, str | None], int] = {}
     deps_paths: dict[Target, dict[int, list[str]]] = {}
+    deps_direct: dict[Target, dict[int, tuple[str, ...]]] = {}
     for target in targets:
         tree = resolver.resolve(roots, target, constraints=source.constraint_specs)
         reach: dict[int, list[str]] = {}
+        direct: dict[int, tuple[str, ...]] = {}
+        direct_names = _direct_roots(tree)
         for key, path in tree.paths.items():
             version, error = tree.chosen.get(key), tree.errors.get(key)
             if version is None and error is None:
@@ -351,7 +379,10 @@ def resolve_deps(source: Source, targets: list[Target], resolver: Resolver | Non
             if version is not None and error is not None:
                 packages[i].error = error  # its dependencies couldn't be read: unknown, not a clean bill
             reach[i] = path
+            if roots := direct_names.get(key):
+                direct[i] = tuple(resolver.names.get(name, name) for name in roots)
         deps_paths[target] = reach
+        deps_direct[target] = direct
     if source.requirements:
         if fc := source.format_control:  # --no-binary/--only-binary lines apply to the resolved packages too
             for p in packages:
@@ -359,3 +390,4 @@ def resolve_deps(source: Source, targets: list[Target], resolver: Resolver | Non
                     p.no_binary, p.only_binary = fc.policy(p.key)
     source.packages = packages
     source.deps_paths = deps_paths
+    source.deps_direct = deps_direct
