@@ -910,9 +910,15 @@ def direct_dependencies(
             owners[i][key] = name
             queue.append((i, key))
 
-    for i in source.roots:
-        for child in adjacency.get(i, []):
-            seed(child)
+    if source.kind == "poetry":
+        # Poetry 1.x infers direct packages as its roots. Unlike a uv workspace,
+        # these roots themselves are the direct dependencies of the project.
+        for i in source.roots:
+            seed(i)
+    else:
+        for i in source.roots:
+            for child in adjacency.get(i, []):
+                seed(child)
     for k in sorted(range(len(source.root_edges)), key=lambda j: j in source.root_groups):
         for child in follow([source.root_edges[k]]):
             seed(child)
