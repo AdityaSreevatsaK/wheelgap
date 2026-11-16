@@ -1761,8 +1761,7 @@ def test_ignored_missing_with_counted_source_passes_fail_on_missing(capsys, fixt
     # The added "via" hints widen the package column; assert cells rather than fixed padding.
     assert any(line.split() == ["purewheel", "3.1", "✓", "✓"] for line in out.splitlines())
     assert any(
-        line.split() == ["puresdist", "1.0", "●", "source", "✗", "missing", "(ignored)"]
-        for line in out.splitlines()
+        line.split() == ["puresdist", "1.0", "●", "source", "✗", "missing", "(ignored)"] for line in out.splitlines()
     )
 
 
