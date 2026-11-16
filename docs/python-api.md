@@ -69,7 +69,7 @@ for r in wheelgap.check_packages([("mcp", "2.3.0")], wheelgap.make_targets("3.14
 ### `check_lockfile()`
 
 ```python
-check_lockfile(path, targets=None, *, online=False, offline=False, pyodide_locks=(), environment=None)
+check_lockfile(path, targets=None, *, online=False, offline=False, pyodide_locks=(), environment=None, deps=False)
 ```
 
 Check every package a lockfile (or a project directory) installs on at least one target. Environment markers and the
@@ -85,7 +85,18 @@ lock's files if a lookup fails).
 - `environment=` picks a `pixi.lock` environment (default: `default`); for a project directory it makes
   `pixi.lock` the lockfile read. Naming one for any other lockfile raises `SourceError`.
 
-`check_lockfile()` doesn't read `pyproject.toml` as an input.
+`deps=True` resolves all dependencies of a requirements file or `pyproject.toml`, per
+target, using the same conservative PyPI resolver as the CLI's `--deps`. It retains
+dependency paths in `Result.via` and refuses lockfiles, `offline=True`,
+non-PyPI installers and unresolved trees. A project directory containing only a
+`pyproject.toml` is also supported with `deps=True`. Without `deps=True`,
+`check_lockfile()` still refuses `pyproject.toml`.
+
+```python
+for result in wheelgap.check_lockfile("requirements.txt", targets, deps=True):
+    for target in result.gaps:
+        print(result.name, result.via.get(target))
+```
 
 ### Pyodide
 
