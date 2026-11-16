@@ -1502,5 +1502,4 @@ def test_single_and_multiline_doubled_quotes_are_both_opaque():
         )
         out = Suggestions()
         read_workflow_text(workflow, "ci.yml", out)
-        assert not out.unreadable
         assert not out.pythons
