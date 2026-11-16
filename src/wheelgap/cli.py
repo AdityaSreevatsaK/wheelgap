@@ -243,7 +243,8 @@ def make_parser() -> argparse.ArgumentParser:
         help="delete the cache of pinned package lookups first; with no INPUT, do only that",
     )
     p.add_argument(
-        "--from-log", metavar="FILE",
+        "--from-log",
+        metavar="FILE",
         help="read pip/uv failed wheel builds from FILE (or - for stdin), then check their wheels with --explain "
         "and --suggest",
     )
