@@ -19,6 +19,7 @@ wheelgap psycopg2 numpy==2.3.4    # package names, with or without a version
 | [`Pipfile.lock`](#pipfilelock) | no | no |
 | [`pixi.lock`](#pixilock) | no | no |
 | [requirements files](#requirements-files) | no | with `--deps` (after 0.11.0) |
+| [pip installation report](#pip-installation-report) | no | no |
 | [`pyproject.toml`](#pyprojecttoml) | no | with `--deps` (after 0.11.0) |
 | [package names](#package-names) | no | with `--deps` |
 
@@ -217,6 +218,17 @@ missing from all of them.
 
 `check_lockfile()` takes `environment=` too; the MCP tools and `[tool.wheelgap]` read the `default` environment only.
 Naming an environment for any other lockfile is an error.
+
+## Pip installation report
+
+Use pip's actual resolved pins without installing packages:
+
+```bash
+python -m pip install --dry-run --ignore-installed --report report.json -r requirements.txt
+wheelgap report.json -p 3.14 -t win-arm64
+```
+
+Reads `version: "1"` reports and the `metadata.name` / `metadata.version` pins under `install`. VCS, local paths and direct non-PyPI downloads are skipped. These packages are looked up on the selected index to check wheels. A pip report is a snapshot of what pip resolved for the machine that generated it, **not** a cross-platform lockfile: wheelgap warns when checking another environment, since dependencies installed only on that platform may be absent.
 
 ## Requirements files
 
