@@ -19,9 +19,8 @@ from packaging.markers import InvalidMarker, Marker
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.utils import canonicalize_name
 
-from . import __version__, cache, condaforge, origin
+from . import __version__, cache, condaforge, issue_links, origin
 from . import notes as tracker
-from . import issue_links
 from . import suggest as release_suggest
 from .api import running_python
 from .badge import write_badge
