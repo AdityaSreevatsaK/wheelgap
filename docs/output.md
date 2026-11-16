@@ -88,6 +88,14 @@ uvloop 0.21.0 on win-arm64: ● source
 Other inputs have no dependency graph, so they show no path. If you think wheelgap got a package wrong, this output
 (or `--json --explain`) is all a bug report needs, with no need to share your lockfile.
 
+### Package issue trackers
+
+For a wheel gap in a package positively identified as coming from PyPI, `--explain` may include
+`ask for a wheel: https://...`. The link comes from PyPI's `project_urls` (`Issues`, `Bug Tracker`,
+or `Tracker`), or a GitHub repository's `Source` / `Homepage`. Only HTTPS URLs are accepted, and
+private-index package names are never sent to PyPI solely to find an issue link.
+The optional field `issues_url` also appears in `--json --explain` when available.
+
 ### Tracker notes {#notes}
 
 With `--notes` (or `notes = true` in `[tool.wheelgap]`), `--explain` also shows the
