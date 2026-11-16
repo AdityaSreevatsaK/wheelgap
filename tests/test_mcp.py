@@ -1608,11 +1608,11 @@ def test_mcp_docs_name_every_argument():
     """Every schema property must be documented beneath its own tool, not just mentioned elsewhere."""
     text = (Path(__file__).resolve().parent.parent / "docs" / "mcp.md").read_text(encoding="utf-8")
     for tool in mcp.TOOLS:
-        heading = f"### \`{tool['name']}\` arguments"
+        heading = f"### `{tool['name']}` arguments"
         assert heading in text, f"missing argument section for {tool['name']}"
-        section = text.split(heading, 1)[1].split("\\n### ", 1)[0]
+        section = text.split(heading, 1)[1].split("\n### ", 1)[0]
         for name in tool["inputSchema"]["properties"]:
-            assert f"\`{name}\`" in section, f"{tool['name']}: undocumented argument {name}"
+            assert f"`{name}`" in section, f"{tool['name']}: undocumented argument {name}"
 
 
 # The 2026-07-28 revision: no handshake; every request carries its version and the client's capabilities in _meta.
