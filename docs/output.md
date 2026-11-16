@@ -406,6 +406,9 @@ report, alongside whatever output mode you use. It has one testsuite per target 
 ```
 
 - A cell that fails the run is a failure: `missing`, `unknown`, and `source` unless `--fail-on missing`.
+- For transitive gaps, failure and advisory-skip messages include the direct dependency that brought in the
+  package, e.g. `source (via mcp)` or `source (via mcp +2)`. Failure text names all those direct
+  dependencies. Testcase names stay unchanged, so dashboard history is preserved.
 - `n/a` cells are skipped, and so are gaps that `--ignore NAME:TARGET` accepts (message `ignored`).
 - A gap on an `--advisory` target is skipped with the message `advisory: source` (or `missing`,
   `unknown`), so dashboards that mark a build unstable on failed tests don't.
