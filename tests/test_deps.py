@@ -506,8 +506,16 @@ def test_requirements_deps_applies_marker_constraints_per_target(index, capsys, 
     (tmp_path / "requirements.txt").write_text("-c constraints.txt\na\n", encoding="utf-8")
     code = main(
         [
-            str(tmp_path / "requirements.txt"), "--deps", "-p", "3.14",
-            "-t", "win-arm64", "-t", "linux-x86_64", "--json", "--no-cache",
+            str(tmp_path / "requirements.txt"),
+            "--deps",
+            "-p",
+            "3.14",
+            "-t",
+            "win-arm64",
+            "-t",
+            "linux-x86_64",
+            "--json",
+            "--no-cache",
         ]
     )
     data = json.loads(capsys.readouterr().out)
@@ -524,10 +532,7 @@ def test_requirements_deps_applies_marker_constraints_per_target(index, capsys, 
 
 
 def test_requirements_deps_marker_constraint_without_installed_package_is_harmless(index, capsys, tmp_path):
-    (tmp_path / "constraints.txt").write_text(
-        'unused==999; sys_platform == "win32"\n', encoding="utf-8"
-    )
+    (tmp_path / "constraints.txt").write_text('unused==999; sys_platform == "win32"\n', encoding="utf-8")
     (tmp_path / "requirements.txt").write_text("-c constraints.txt\na\n", encoding="utf-8")
-    assert main([str(tmp_path / "requirements.txt"), "--deps", "-p", "3.14",
-                 "-t", "win-arm64", "--no-cache"]) == 0
+    assert main([str(tmp_path / "requirements.txt"), "--deps", "-p", "3.14", "-t", "win-arm64", "--no-cache"]) == 0
     assert "can't follow" not in capsys.readouterr().err
