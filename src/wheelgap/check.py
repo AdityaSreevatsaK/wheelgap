@@ -608,12 +608,7 @@ def _narrow_candidates(
     return candidates
 
 
-def _uv_reachable(
-    source: Source,
-    target: Target,
-    paths: dict[int, list[str]] | None = None,
-    activated: dict[int, frozenset[str]] | None = None,
-) -> dict[int, Parent]:
+def _uv_reachable(source: Source, target: Target, paths: dict[int, list[str]] | None = None) -> dict[int, Parent]:
     """Walk selected uv roots, re-visiting a package when another edge activates more extras."""
     selection = source.uv_selection
     assert selection is not None
@@ -634,7 +629,7 @@ def _uv_reachable(
     for i, package in enumerate(source.packages):
         by_name.setdefault(package.key, []).append(i)
     parents: dict[int, Parent] = {}
-    active: dict[int, frozenset[str]] = activated if activated is not None else {}
+    active: dict[int, frozenset[str]] = {}
     queue: deque[tuple[int, frozenset[str], list[str]]] = deque()
     paths = paths if paths is not None else {}
 
@@ -793,70 +788,118 @@ def applies(pkg: Package, target: Target) -> bool:
     return pkg.markers is None or any(marker_holds(m, target) for m in pkg.markers)
 
 
-def direct_dependencies(
-    source: Source,
-    target: Target,
-    installed: dict[int, Parent] | dict[int, list[str]],
-    activated: dict[int, frozenset[str]] | None = None,
+def _selected_direct_dependencies(
+    source: Source, target: Target, installed: dict[int, Parent] | dict[int, list[str]]
 ) -> dict[int, tuple[str, ...]]:
-    """For each transitive package, the distinct direct dependencies that reach it on this target.
-
-    Walk each direct dependency's reachable subgraph once per owner. Keep different owners even
-    when paths merge, and deduplicate several paths through the same direct dependency.
-    """
-    if source.edges is None:
-        return {}
+    """Attribute selected uv dependencies per direct root, keeping requested extras separate."""
+    selection = source.uv_selection
+    assert selection is not None
+    packages = source.uv_packages or []
+    roots = uv_selected_roots(source)
+    available = {canonicalize_name(n) for n in source.uv_manifest.get("dependency-groups", {})} | {
+        n for i in roots for n in uv_group_names(packages[i])
+    }
+    if selection.only_groups:
+        selected = selection.only_groups | selection.groups
+    else:
+        defaults = available if "*" in source.uv_default_groups else frozenset(source.uv_default_groups)
+        selected = selection.groups | defaults
+    groups = frozenset(selected - {"dev"} if selection.no_dev else selected)
     by_name: dict[str, list[int]] = {}
     for i, pkg in enumerate(source.packages):
         by_name.setdefault(pkg.key, []).append(i)
     chosen = set(installed)
-    selection = source.uv_selection
-    roots = uv_selected_roots(source) if selection is not None else source.roots
-    groups: frozenset[str] = frozenset()
-    if selection is not None:
-        available = {canonicalize_name(n) for n in source.uv_manifest.get("dependency-groups", {})} | {
-            n for i in roots for n in uv_group_names((source.uv_packages or [])[i])
-        }
-        if selection.only_groups:
-            selected = selection.only_groups | selection.groups
-        else:
-            defaults = available if "*" in source.uv_default_groups else frozenset(source.uv_default_groups)
-            selected = selection.groups | defaults
-        groups = frozenset(selected - {"dev"} if selection.no_dev else selected)
+    direct = set(roots) & chosen
+    owners: dict[int, dict[str, str]] = {}
+    active: dict[tuple[int, str], frozenset[str]] = {}
+    queue: deque[tuple[int, str]] = deque()
 
-    def follow(edges: Iterable[Edge], extras: frozenset[str] = frozenset()) -> list[int]:
+    def visit(i: int, owner: tuple[str, str], requested: frozenset[str]) -> None:
+        key, label = owner
+        state = (i, key)
+        previous = active.get(state)
+        if previous is None:
+            active[state] = requested
+            owners.setdefault(i, {})[key] = label
+            queue.append(state)
+        elif not requested <= previous:
+            active[state] = previous | requested
+            queue.append(state)
+
+    def follow(items: list[dict], owner: tuple[str, str] | None, extras: frozenset[str]) -> None:
+        for d in items:
+            if not marker_holds(d.get("marker"), target, extras=extras, groups=groups):
+                continue
+            matches = _narrow_candidates(
+                source, by_name.get(canonicalize_name(d["name"]), []), d.get("version"), d.get("source")
+            )
+            requested = frozenset(canonicalize_name(name) for name in d.get("extra", d.get("extras", [])))
+            for i in matches:
+                if i not in chosen:
+                    continue
+                if owner is None:
+                    direct.add(i)
+                    visit(i, (source.packages[i].key, source.packages[i].name), requested)
+                else:
+                    visit(i, owner, requested)
+
+    if not selection.only_groups:
+        for i in roots:
+            p = packages[i]
+            possible = uv_extra_names(p)
+            extras = possible if selection.all_extras else selection.extras & possible
+            follow(p.get("dependencies", []), None, extras)
+            for name, optional in p.get("optional-dependencies", {}).items():
+                if canonicalize_name(name) in extras:
+                    follow(optional, None, extras)
+        follow(source.uv_manifest.get("requirements", []), None, selection.extras)
+    for i in roots:
+        for name, items in packages[i].get("dev-dependencies", {}).items():
+            if canonicalize_name(name) in groups:
+                follow(items, None, frozenset())
+    for name, items in source.uv_manifest.get("dependency-groups", {}).items():
+        if canonicalize_name(name) in groups:
+            follow(items, None, frozenset())
+
+    while queue:
+        i, key = queue.popleft()
+        p, extras = packages[i], active[i, key]
+        owner = (key, owners[i][key])
+        follow(p.get("dependencies", []), owner, extras)
+        for name, optional in p.get("optional-dependencies", {}).items():
+            if canonicalize_name(name) in extras:
+                follow(optional, owner, extras)
+    return {i: tuple(found.values()) for i, found in owners.items() if i not in direct}
+
+
+def direct_dependencies(
+    source: Source, target: Target, installed: dict[int, Parent] | dict[int, list[str]]
+) -> dict[int, tuple[str, ...]]:
+    """Map transitive packages to distinct direct dependencies, without counting duplicate paths."""
+    if source.edges is None:
+        return {}
+    if source.uv_selection is not None:
+        return _selected_direct_dependencies(source, target, installed)
+    by_name: dict[str, list[int]] = {}
+    for i, pkg in enumerate(source.packages):
+        by_name.setdefault(pkg.key, []).append(i)
+    chosen = set(installed)
+
+    def follow(edges: Iterable[Edge]) -> list[int]:
         found: list[int] = []
         for name, version, marker, origin in edges:
-            if marker_holds(marker, target, extras=extras, groups=groups):
+            if marker_holds(marker, target):
                 found.extend(
-                    i for i in _narrow_candidates(source, by_name.get(canonicalize_name(name), []), version, origin)
+                    i
+                    for i in _narrow_candidates(
+                        source, by_name.get(canonicalize_name(name), []), version, origin, allow_range=True
+                    )
                     if i in chosen
                 )
         return found
 
-    def uv_edges(items: list[dict]) -> list[Edge]:
-        return [(d["name"], d.get("version"), d.get("marker"), d.get("source")) for d in items]
-
-    adjacency: dict[int, list[int]] = {}
-    for i in chosen:
-        if selection is None:
-            edges = source.edges.get(i, [])
-            adjacency[i] = follow(edges)
-        else:
-            p = (source.uv_packages or [])[i]
-            extras = (activated or {}).get(i, frozenset())
-            dependencies = list(p.get("dependencies", []))
-            for name, optional in p.get("optional-dependencies", {}).items():
-                if canonicalize_name(name) in extras:
-                    dependencies.extend(optional)
-            if i in roots:
-                for name, entries in p.get("dev-dependencies", {}).items():
-                    if canonicalize_name(name) in groups:
-                        dependencies.extend(entries)
-            adjacency[i] = follow(uv_edges(dependencies), extras)
-
-    # Direct nodes are never labelled "via" themselves, even when another direct package reaches them.
-    direct = set(roots) & chosen
+    adjacency = {i: follow(source.edges.get(i, [])) for i in chosen}
+    direct = set(source.roots) & chosen
     owners: dict[int, dict[str, str]] = {}
     queue: deque[tuple[int, str]] = deque()
 
@@ -867,27 +910,12 @@ def direct_dependencies(
             owners[i][key] = name
             queue.append((i, key))
 
-    if selection is None or not selection.only_groups:
-        for i in roots:
-            for child in adjacency.get(i, []):
-                seed(child)
-    if selection is not None:
-        for i in roots:
-            p = (source.uv_packages or [])[i]
-            for name, entries in p.get("dev-dependencies", {}).items():
-                if canonicalize_name(name) in groups:
-                    for child in follow(uv_edges(entries)):
-                        seed(child)
+    for i in source.roots:
+        for child in adjacency.get(i, []):
+            seed(child)
     for k in sorted(range(len(source.root_edges)), key=lambda j: j in source.root_groups):
-        group = source.root_groups.get(k)
-        if selection is not None:
-            if group is None and selection.only_groups:
-                continue
-            if group is not None and canonicalize_name(group) not in groups:
-                continue
         for child in follow([source.root_edges[k]]):
             seed(child)
-
     while queue:
         i, owner = queue.popleft()
         for child in adjacency.get(i, []):
@@ -903,21 +931,18 @@ def check(sources: list[Source], targets: list[Target]) -> list[Row]:
     for source in sources:
         paths: dict[Target, dict[int, list[str]]] = {target: {} for target in targets}
         installed: dict[Target, dict[int, Parent]] | dict[Target, dict[int, list[str]]] | None
-        activated: dict[Target, dict[int, frozenset[str]]] = {target: {} for target in targets}
         if source.deps_paths is not None:  # --deps: resolved per target already
             paths = {t: source.deps_paths.get(t, {}) for t in targets}
             installed = paths
         elif source.edges is not None:
             installed = {
-                t: _uv_reachable(source, t, paths[t], activated[t])
-                if source.uv_selection is not None
-                else reachable(source, t)
+                t: _uv_reachable(source, t, paths[t]) if source.uv_selection is not None else reachable(source, t)
                 for t in targets
             }
         else:
             installed = None
         via_direct = (
-            {t: direct_dependencies(source, t, installed[t], activated[t]) for t in targets}
+            {t: direct_dependencies(source, t, installed[t]) for t in targets}
             if installed is not None and source.edges is not None
             else {}
         )
