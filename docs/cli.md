@@ -376,7 +376,10 @@ so CI can publish it; an empty `PATH` is an error, as for `--junit`. See [Recipe
 ### `--github-annotations` {#github-annotations}
 
 Also mark each package with a gap on its own line of the lockfile in GitHub Actions, as an
-annotation. The GitHub Action passes it; see [CI](ci.md#annotations).
+annotation. With `--deps` on a requirements file, direct gaps keep their original line and a transitive
+gap uses the responsible direct requirement's line only when that is unambiguous across gap targets.
+Otherwise, the annotation identifies the file without a line and names the possible direct parents.
+`pyproject.toml` annotations remain file-only. The GitHub Action passes it; see [CI](ci.md#annotations).
 
 ### `--color` {#color}
 
