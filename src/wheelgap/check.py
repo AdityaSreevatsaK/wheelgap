@@ -954,8 +954,12 @@ def check(sources: list[Source], targets: list[Target]) -> list[Row]:
                         if source.uv_selection is not None or source.deps_paths is not None
                         else dependency_path(source, installed[t], i)  # type: ignore[arg-type]
                     )
-                    if source.deps_paths is not None and len(row.via[t]) > 1:
-                        row.direct_via[t] = (row.via[t][0],)
+                    if source.deps_paths is not None:
+                        direct = (source.deps_direct or {}).get(t, {}).get(i)
+                        if direct:
+                            row.direct_via[t] = direct
+                        elif source.deps_direct is None and len(row.via[t]) > 1:
+                            row.direct_via[t] = (row.via[t][0],)
                     elif direct := via_direct.get(t, {}).get(i):
                         row.direct_via[t] = direct
             rows.extend(resolved_rows.values())
