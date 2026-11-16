@@ -398,8 +398,8 @@ def resolve_deps(source: Source, targets: list[Target], resolver: Resolver | Non
             if version is not None and error is not None:
                 packages[i].error = error  # its dependencies couldn't be read: unknown, not a clean bill
             reach[i] = path
-            if roots := direct_names.get(key):
-                direct[i] = tuple(resolver.names.get(name, name) for name in roots)
+            if origin_names := direct_names.get(key):
+                direct[i] = tuple(resolver.names.get(name, name) for name in origin_names)
         deps_paths[target] = reach
         deps_direct[target] = direct
     if source.requirements:
