@@ -309,7 +309,6 @@ def flow_map(rng, entry):
     return "{" + ", ".join(f"{k}: {scalar(rng, v, flow=True)}" for k, v in entry.items()) + "}"
 
 
-
 def varied_flow_map(rng, entry, pair_indent, close_indent, close_suffix=""):
     """A multiline flow mapping with varied legal indentation, keys, comments and last comma."""
     pairs = list(entry.items())
@@ -423,8 +422,7 @@ def realistic_job(rng):
                 step += "\n".join(varied_flow_map(rng, inputs, 10, rng.choice([8, 10]))) + "\n"
             else:
                 step += "        with:\n" + "".join(
-                    f"          {k}: {v if '$' in v else scalar(rng, v)}{comment(rng)}\n"
-                    for k, v in inputs.items()
+                    f"          {k}: {v if '$' in v else scalar(rng, v)}{comment(rng)}\n" for k, v in inputs.items()
                 )
         steps.append(step)
     steps.append(noise_step(rng, "      "))
