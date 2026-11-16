@@ -519,14 +519,12 @@ def test_requirements_deps_applies_marker_constraints_per_target(index, capsys, 
         ]
     )
     data = json.loads(capsys.readouterr().out)
-    versions = {
-        (p["name"], p["results"].get(label)): p["version"]
-        for p in data["packages"]
-        for label in ("win-arm64", "linux-x86_64")
-        if p["name"] == "c" and p["results"].get(label) != "n/a"
-    }
-    assert versions[("c", "wheel")] in ("1.5", "2.0")
-    assert {p["version"] for p in data["packages"] if p["name"] == "c"} == {"1.5", "2.0"}
+    by_version = {p["version"]: p["results"] for p in data["packages"] if p["name"] == "c"}
+    assert set(by_version) == {"1.5", "2.0"}
+    assert by_version["1.5"]["win-arm64"] != "n/a"
+    assert by_version["1.5"]["linux-x86_64"] == "n/a"
+    assert by_version["2.0"]["linux-x86_64"] != "n/a"
+    assert by_version["2.0"]["win-arm64"] == "n/a"
     assert "unused" not in {p["name"] for p in data["packages"]}
     assert code == 0
 
