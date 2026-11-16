@@ -399,6 +399,51 @@ def test_check_lockfile_reports_only_gaps(fake_pypi, fixtures):
     }
 
 
+@pytest.mark.usefixtures("index")
+def test_check_lockfile_dependencies_resolves_transitive_gaps(tmp_path):
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("app==1.0\\n", encoding="utf-8")
+    args = {"path": str(requirements), "python": "3.14", "targets": ["win-arm64", "linux-x86_64"]}
+    (_, direct, tree) = run(
+        init(),
+        call("check_lockfile", **args),
+        call("check_lockfile", 2, **args, dependencies=True),
+    )
+    assert direct["result"]["isError"] is False
+    assert direct["result"]["structuredContent"]["gaps"] == []
+    assert tree["result"]["isError"] is False
+    data = tree["result"]["structuredContent"]
+    crypt = next(g for g in data["gaps"] if g["name"] == "crypt")
+    assert crypt["results"]["3.14 win-arm64"] == "source"
+    assert crypt["via"]["3.14 win-arm64"] == ["app", "lib", "crypt"]
+    assert data["ok"] is False
+
+
+@pytest.mark.parametrize("value", ["yes", 1, [], {}])
+def test_check_lockfile_dependencies_requires_boolean(tmp_path, value):
+    path = tmp_path / "requirements.txt"
+    path.write_text("purewheel==3.1\\n", encoding="utf-8")
+    (_, reply) = run(init(), call("check_lockfile", path=str(path), dependencies=value))
+    assert reply["result"]["isError"] is True
+    assert "'dependencies' must be true or false" in reply["result"]["content"][0]["text"]
+
+
+def test_check_lockfile_dependencies_refuses_lockfiles_and_offline(tmp_path, fixtures):
+    (_, lockfile) = run(
+        init(),
+        call("check_lockfile", path=str(fixtures / "uvproj" / "uv.lock"), dependencies=True, python="3.13"),
+    )
+    assert lockfile["result"]["isError"] is True
+    assert "--deps" in lockfile["result"]["content"][0]["text"]
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("purewheel==3.1\\n", encoding="utf-8")
+    (_, offline) = run(
+        init(), call("check_lockfile", path=str(requirements), dependencies=True, offline=True, python="3.13")
+    )
+    assert offline["result"]["isError"] is True
+    assert "--deps" in offline["result"]["content"][0]["text"]
+
+
 def test_check_lockfile_lists_skipped_packages(fake_pypi, fixtures):
     (_, reply) = run(
         init(), call("check_lockfile", path=str(fixtures / "uvproj"), python="3.13", targets=["linux-x86_64"])
