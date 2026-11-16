@@ -794,3 +794,50 @@ def test_deps_json_explain_direct_extra_only_names_the_requester(index, capsys):
     assert code == 1
     crypt = next(p for p in output["packages"] if p["name"] == "crypt")
     assert crypt["direct"] == {"win-arm64": ["app"]}
+
+
+def test_api_check_lockfile_deps_resolves_requirements_and_via(index, tmp_path):
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("app==1.0\n", encoding="utf-8")
+    targets = wheelgap.make_targets("3.14", ["linux-x86_64", "win-arm64"])
+    direct = wheelgap.check_lockfile(requirements, targets)
+    assert [r.name for r in direct] == ["app"]
+    tree = {r.name: r for r in wheelgap.check_lockfile(requirements, targets, deps=True)}
+    assert {"app", "lib", "crypt", "winonly"} <= set(tree)
+    assert tree["crypt"].statuses[targets[1]] is wheelgap.Status.SOURCE
+    assert tree["crypt"].via[targets[1]] == ("app", "lib", "crypt")
+    assert tree["crypt"].statuses[targets[0]] is wheelgap.Status.WHEEL
+
+
+def test_api_check_lockfile_deps_accepts_pyproject_and_directory(index, tmp_path):
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\nname = "sample"\nversion = "1.0"\ndependencies = ["app==1.0"]\n',
+        encoding="utf-8",
+    )
+    targets = wheelgap.make_targets("3.14", "win-arm64")
+    for path in (pyproject, tmp_path):
+        tree = wheelgap.check_lockfile(path, targets, deps=True)
+        assert {r.name for r in tree} == {"app", "lib", "crypt", "winonly"}
+        assert next(r for r in tree if r.name == "crypt").via[targets[0]] == ("app", "lib", "crypt")
+    with pytest.raises(wheelgap.SourceError, match="direct dependencies only"):
+        wheelgap.check_lockfile(pyproject, targets)
+
+
+def test_api_check_lockfile_deps_refuses_lockfile_and_offline(index, tmp_path):
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("app==1.0\n", encoding="utf-8")
+    targets = wheelgap.make_targets("3.14", "win-arm64")
+    with pytest.raises(wheelgap.SourceError, match="--deps"):
+        wheelgap.check_lockfile(requirements, targets, deps=True, offline=True)
+    uvlock = tmp_path / "uv.lock"
+    uvlock.write_text("version = 1\n", encoding="utf-8")
+    with pytest.raises(wheelgap.SourceError, match="lockfile already lists"):
+        wheelgap.check_lockfile(uvlock, targets, deps=True)
+
+
+def test_api_check_lockfile_deps_refuses_private_index(index, tmp_path):
+    requirements = tmp_path / "requirements.txt"
+    requirements.write_text("--index-url https://private.example/simple\napp==1.0\n", encoding="utf-8")
+    with pytest.raises(wheelgap.SourceError, match="installer index"):
+        wheelgap.check_lockfile(requirements, wheelgap.make_targets("3.14", "win-arm64"), deps=True)
