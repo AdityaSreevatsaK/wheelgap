@@ -515,3 +515,13 @@ def test_deps_json_keeps_original_path(index, capsys):
     assert code == 1
     crypt = next(p for p in output["packages"] if p["name"] == "crypt")
     assert "via_direct" not in crypt
+
+
+def test_deps_extra_only_labels_the_requesting_direct_root(index, capsys):
+    for display in ([], ["--markdown"]):
+        code = main(["app", "plain", "--deps", "-p", "3.14", "-t", "win-arm64", *display])
+        output = capsys.readouterr().out
+        assert code == 1
+        assert "crypt (via app)" in output
+        assert "crypt (via app +1)" not in output
+    assert index
