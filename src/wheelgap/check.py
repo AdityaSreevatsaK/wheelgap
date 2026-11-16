@@ -67,12 +67,12 @@ class Row:
     results: dict[Target, Status] = field(default_factory=dict)
     # uv.lock only: the shortest dependency path that installs this package on each target.
     via: dict[Target, list[str]] = field(default_factory=dict)
-    # Direct dependencies that reach a transitive package on a target, for concise text/Markdown hints.
-    direct_via: dict[Target, tuple[str, ...]] = field(default_factory=dict)
     # --ignore NAME:TARGET: targets whose result is still reported but doesn't count as a gap.
     ignored: frozenset[Target] = frozenset()
     # The input requirement that resolved to this row (a range resolved per Python spawns one Row per release).
     input_package: Package | None = field(default=None, repr=False, compare=False)
+    # Direct dependencies that reach a transitive package on a target, for concise text/Markdown hints.
+    direct_via: dict[Target, tuple[str, ...]] = field(default_factory=dict, repr=False, compare=False)
 
     @property
     def counted(self) -> list[Status]:
@@ -796,7 +796,7 @@ def applies(pkg: Package, target: Target) -> bool:
 def direct_dependencies(
     source: Source,
     target: Target,
-    installed: dict[int, Parent],
+    installed: dict[int, Parent] | dict[int, list[str]],
     activated: dict[int, frozenset[str]] | None = None,
 ) -> dict[int, tuple[str, ...]]:
     """For each transitive package, the distinct direct dependencies that reach it on this target.
