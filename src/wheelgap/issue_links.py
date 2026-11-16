@@ -55,9 +55,7 @@ def markdown_link(url: str) -> str:
     return quote(url, safe="/:@?&=#%+-._~")
 
 
-def populate_issues_urls(
-    rows: list[Row], sources: list[Source], *, simple_index: str | None = None
-) -> None:
+def populate_issues_urls(rows: list[Row], sources: list[Source], *, simple_index: str | None = None) -> None:
     """Use metadata from existing PyPI lookups; do not change --explain's network behaviour.
 
     A lockfile's stored wheels already explain the gaps without contacting PyPI, so only
