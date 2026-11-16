@@ -9,7 +9,6 @@ from .check import Row
 from .origin import known_pypi, private_names
 from .sources import Source
 
-
 _ISSUE_KEYS = ("issues", "bug tracker", "tracker")
 _FALLBACK_KEYS = ("source", "homepage")
 
