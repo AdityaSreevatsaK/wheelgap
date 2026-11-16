@@ -91,3 +91,16 @@ def test_missing_report_file_is_an_input_error(tmp_path, capsys):
     code = main([str(tmp_path / "report.json"), "--json"])
     assert code == 2
     assert "no such file" in capsys.readouterr().err
+
+
+def test_report_never_queries_an_entry_without_origin(tmp_path, capsys, fake_pypi):
+    path = tmp_path / "report.json"
+    make_report(
+        path,
+        [{"metadata": {"name": "private-project", "version": "1.0"}}],
+    )
+    code = main([str(path), "-p", "3.13", "-t", "linux-x86_64", "--json"])
+    data = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert data["skipped"] == [{"name": "private-project", "reason": "url"}]
+    assert fake_pypi == []
