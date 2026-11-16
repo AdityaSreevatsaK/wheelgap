@@ -402,7 +402,7 @@ def test_check_lockfile_reports_only_gaps(fake_pypi, fixtures):
 @pytest.mark.usefixtures("index")
 def test_check_lockfile_dependencies_resolves_transitive_gaps(tmp_path):
     requirements = tmp_path / "requirements.txt"
-    requirements.write_text("app==1.0\\n", encoding="utf-8")
+    requirements.write_text("app==1.0\n", encoding="utf-8")
     args = {"path": str(requirements), "python": "3.14", "targets": ["win-arm64", "linux-x86_64"]}
     (_, direct, tree) = run(
         init(),
@@ -422,7 +422,7 @@ def test_check_lockfile_dependencies_resolves_transitive_gaps(tmp_path):
 @pytest.mark.parametrize("value", ["yes", 1, [], {}])
 def test_check_lockfile_dependencies_requires_boolean(tmp_path, value):
     path = tmp_path / "requirements.txt"
-    path.write_text("purewheel==3.1\\n", encoding="utf-8")
+    path.write_text("purewheel==3.1\n", encoding="utf-8")
     (_, reply) = run(init(), call("check_lockfile", path=str(path), dependencies=value))
     assert reply["result"]["isError"] is True
     assert "'dependencies' must be true or false" in reply["result"]["content"][0]["text"]
@@ -436,7 +436,7 @@ def test_check_lockfile_dependencies_refuses_lockfiles_and_offline(tmp_path, fix
     assert lockfile["result"]["isError"] is True
     assert "--deps" in lockfile["result"]["content"][0]["text"]
     requirements = tmp_path / "requirements.txt"
-    requirements.write_text("purewheel==3.1\\n", encoding="utf-8")
+    requirements.write_text("purewheel==3.1\n", encoding="utf-8")
     (_, offline) = run(
         init(), call("check_lockfile", path=str(requirements), dependencies=True, offline=True, python="3.13")
     )
