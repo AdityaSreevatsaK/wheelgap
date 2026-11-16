@@ -3756,3 +3756,29 @@ def test_gap_directly_required_is_not_labelled_via(capsys, tmp_path, fake_pypi):
     code, out, _ = run(capsys, str(tmp_path), "-p", "3.13", "-t", "linux-x86_64", "--offline")
     assert code == 1 and "cryptography" in out and "cryptography (via" not in out
     assert fake_pypi == []
+
+
+def test_selected_uv_extra_is_attributed_only_to_the_direct_requester(capsys, tmp_path, fake_pypi):
+    (tmp_path / "uv.lock").write_text(
+        'version = 1\n'
+        '[[package]]\nname = "app"\nversion = "1"\nsource = { editable = "." }\n'
+        'dependencies = [{ name = "mcp" }, { name = "plain" }]\n'
+        '[[package]]\nname = "mcp"\nversion = "1"\nsource = { registry = "https://pypi.org/simple" }\n'
+        'dependencies = [{ name = "shared", extra = ["crypto"] }]\n'
+        'wheels = [{ url = "https://files.example/mcp-1-py3-none-any.whl" }]\n'
+        '[[package]]\nname = "plain"\nversion = "1"\nsource = { registry = "https://pypi.org/simple" }\n'
+        'dependencies = [{ name = "shared" }]\n'
+        'wheels = [{ url = "https://files.example/plain-1-py3-none-any.whl" }]\n'
+        '[[package]]\nname = "shared"\nversion = "1"\nsource = { registry = "https://pypi.org/simple" }\n'
+        'wheels = [{ url = "https://files.example/shared-1-py3-none-any.whl" }]\n'
+        '[package.optional-dependencies]\ncrypto = [{ name = "cryptography" }]\n'
+        '[[package]]\nname = "cryptography"\nversion = "50.0.2"\n'
+        'source = { registry = "https://pypi.org/simple" }\n'
+        'sdist = { url = "https://files.example/cryptography-50.0.2.tar.gz" }\n',
+        encoding="utf-8",
+    )
+    code, out, err = run(capsys, str(tmp_path), "--no-dev", "-p", "3.13", "-t", "linux-x86_64", "--offline")
+    assert code == 1 and not err
+    assert "cryptography (via mcp)" in out
+    assert "cryptography (via mcp +1)" not in out
+    assert fake_pypi == []
