@@ -50,6 +50,8 @@ wheelgap -p 3.14t -t all
 
 # Several Pythons at once, Linux on both architectures
 wheelgap uv.lock -p 3.12,3.13,3.14 -t linux-x86_64,linux-aarch64
+Failed pip/uv builds can be diagnosed from an install log with `wheelgap --from-log install.log`, which checks the failed packages with `--explain --suggest` (see [CLI options](docs/cli.md)).
+
 
 # Resolve a version range separately for each Python
 wheelgap "numpy>=1.26,<3" -p 3.9,3.13 -t linux
