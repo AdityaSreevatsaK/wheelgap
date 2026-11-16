@@ -67,6 +67,8 @@ class Row:
     results: dict[Target, Status] = field(default_factory=dict)
     # uv.lock only: the shortest dependency path that installs this package on each target.
     via: dict[Target, list[str]] = field(default_factory=dict)
+    # Direct dependencies that reach a transitive package on a target, for concise text/Markdown hints.
+    direct_via: dict[Target, tuple[str, ...]] = field(default_factory=dict)
     # --ignore NAME:TARGET: targets whose result is still reported but doesn't count as a gap.
     ignored: frozenset[Target] = frozenset()
     # The input requirement that resolved to this row (a range resolved per Python spawns one Row per release).
@@ -606,7 +608,12 @@ def _narrow_candidates(
     return candidates
 
 
-def _uv_reachable(source: Source, target: Target, paths: dict[int, list[str]] | None = None) -> dict[int, Parent]:
+def _uv_reachable(
+    source: Source,
+    target: Target,
+    paths: dict[int, list[str]] | None = None,
+    activated: dict[int, frozenset[str]] | None = None,
+) -> dict[int, Parent]:
     """Walk selected uv roots, re-visiting a package when another edge activates more extras."""
     selection = source.uv_selection
     assert selection is not None
@@ -627,7 +634,7 @@ def _uv_reachable(source: Source, target: Target, paths: dict[int, list[str]] | 
     for i, package in enumerate(source.packages):
         by_name.setdefault(package.key, []).append(i)
     parents: dict[int, Parent] = {}
-    active: dict[int, frozenset[str]] = {}
+    active: dict[int, frozenset[str]] = activated if activated is not None else {}
     queue: deque[tuple[int, frozenset[str], list[str]]] = deque()
     paths = paths if paths is not None else {}
 
@@ -786,21 +793,134 @@ def applies(pkg: Package, target: Target) -> bool:
     return pkg.markers is None or any(marker_holds(m, target) for m in pkg.markers)
 
 
+def direct_dependencies(
+    source: Source,
+    target: Target,
+    installed: dict[int, Parent],
+    activated: dict[int, frozenset[str]] | None = None,
+) -> dict[int, tuple[str, ...]]:
+    """For each transitive package, the distinct direct dependencies that reach it on this target.
+
+    Walk each direct dependency's reachable subgraph once per owner. Keep different owners even
+    when paths merge, and deduplicate several paths through the same direct dependency.
+    """
+    if source.edges is None:
+        return {}
+    by_name: dict[str, list[int]] = {}
+    for i, pkg in enumerate(source.packages):
+        by_name.setdefault(pkg.key, []).append(i)
+    chosen = set(installed)
+    selection = source.uv_selection
+    roots = uv_selected_roots(source) if selection is not None else source.roots
+    groups: frozenset[str] = frozenset()
+    if selection is not None:
+        available = {canonicalize_name(n) for n in source.uv_manifest.get("dependency-groups", {})} | {
+            n for i in roots for n in uv_group_names((source.uv_packages or [])[i])
+        }
+        if selection.only_groups:
+            selected = selection.only_groups | selection.groups
+        else:
+            defaults = available if "*" in source.uv_default_groups else frozenset(source.uv_default_groups)
+            selected = selection.groups | defaults
+        groups = frozenset(selected - {"dev"} if selection.no_dev else selected)
+
+    def follow(edges: Iterable[Edge], extras: frozenset[str] = frozenset()) -> list[int]:
+        found: list[int] = []
+        for name, version, marker, origin in edges:
+            if marker_holds(marker, target, extras=extras, groups=groups):
+                found.extend(
+                    i for i in _narrow_candidates(source, by_name.get(canonicalize_name(name), []), version, origin)
+                    if i in chosen
+                )
+        return found
+
+    def uv_edges(items: list[dict]) -> list[Edge]:
+        return [(d["name"], d.get("version"), d.get("marker"), d.get("source")) for d in items]
+
+    adjacency: dict[int, list[int]] = {}
+    for i in chosen:
+        if selection is None:
+            edges = source.edges.get(i, [])
+            adjacency[i] = follow(edges)
+        else:
+            p = (source.uv_packages or [])[i]
+            extras = (activated or {}).get(i, frozenset())
+            dependencies = list(p.get("dependencies", []))
+            for name, optional in p.get("optional-dependencies", {}).items():
+                if canonicalize_name(name) in extras:
+                    dependencies.extend(optional)
+            if i in roots:
+                for name, entries in p.get("dev-dependencies", {}).items():
+                    if canonicalize_name(name) in groups:
+                        dependencies.extend(entries)
+            adjacency[i] = follow(uv_edges(dependencies), extras)
+
+    # Direct nodes are never labelled "via" themselves, even when another direct package reaches them.
+    direct = set(roots) & chosen
+    owners: dict[int, dict[str, str]] = {}
+    queue: deque[tuple[int, str]] = deque()
+
+    def seed(i: int) -> None:
+        direct.add(i)
+        key, name = source.packages[i].key, source.packages[i].name
+        if key not in owners.setdefault(i, {}):
+            owners[i][key] = name
+            queue.append((i, key))
+
+    if selection is None or not selection.only_groups:
+        for i in roots:
+            for child in adjacency.get(i, []):
+                seed(child)
+    if selection is not None:
+        for i in roots:
+            p = (source.uv_packages or [])[i]
+            for name, entries in p.get("dev-dependencies", {}).items():
+                if canonicalize_name(name) in groups:
+                    for child in follow(uv_edges(entries)):
+                        seed(child)
+    for k in sorted(range(len(source.root_edges)), key=lambda j: j in source.root_groups):
+        group = source.root_groups.get(k)
+        if selection is not None:
+            if group is None and selection.only_groups:
+                continue
+            if group is not None and canonicalize_name(group) not in groups:
+                continue
+        for child in follow([source.root_edges[k]]):
+            seed(child)
+
+    while queue:
+        i, owner = queue.popleft()
+        for child in adjacency.get(i, []):
+            label = owners[i][owner]
+            if owner not in owners.setdefault(child, {}):
+                owners[child][owner] = label
+                queue.append((child, owner))
+    return {i: tuple(found.values()) for i, found in owners.items() if i not in direct}
+
+
 def check(sources: list[Source], targets: list[Target]) -> list[Row]:
     rows: list[Row] = []
     for source in sources:
         paths: dict[Target, dict[int, list[str]]] = {target: {} for target in targets}
         installed: dict[Target, dict[int, Parent]] | dict[Target, dict[int, list[str]]] | None
+        activated: dict[Target, dict[int, frozenset[str]]] = {target: {} for target in targets}
         if source.deps_paths is not None:  # --deps: resolved per target already
             paths = {t: source.deps_paths.get(t, {}) for t in targets}
             installed = paths
         elif source.edges is not None:
             installed = {
-                t: _uv_reachable(source, t, paths[t]) if source.uv_selection is not None else reachable(source, t)
+                t: _uv_reachable(source, t, paths[t], activated[t])
+                if source.uv_selection is not None
+                else reachable(source, t)
                 for t in targets
             }
         else:
             installed = None
+        via_direct = (
+            {t: direct_dependencies(source, t, installed[t], activated[t]) for t in targets}
+            if installed is not None and source.edges is not None
+            else {}
+        )
         for i, pkg in enumerate(source.packages):
             if pkg.skip:
                 continue
@@ -834,5 +954,9 @@ def check(sources: list[Source], targets: list[Target]) -> list[Row]:
                         if source.uv_selection is not None or source.deps_paths is not None
                         else dependency_path(source, installed[t], i)  # type: ignore[arg-type]
                     )
+                    if source.deps_paths is not None and len(row.via[t]) > 1:
+                        row.direct_via[t] = (row.via[t][0],)
+                    elif direct := via_direct.get(t, {}).get(i):
+                        row.direct_via[t] = direct
             rows.extend(resolved_rows.values())
     return rows
