@@ -17,8 +17,10 @@ from wheelgap.targets import build_targets
     [
         ({"Issues": "https://github.com/org/repo/issues"}, "https://github.com/org/repo/issues"),
         ({"bUG TRACkeR": "https://bugs.example.org/new"}, "https://bugs.example.org/new"),
-        ({"Tracker": "http://unsafe.invalid/issue", "Source": "https://github.com/org/repo"},
-         "https://github.com/org/repo/issues"),
+        (
+            {"Tracker": "http://unsafe.invalid/issue", "Source": "https://github.com/org/repo"},
+            "https://github.com/org/repo/issues",
+        ),
         ({"Homepage": "https://github.com/org/repo.git"}, "https://github.com/org/repo/issues"),
         ({"Homepage": "https://example.org/project"}, None),
         ({"Issues": "https://github.com/org/repo/issues\n::warning::bad"}, None),
