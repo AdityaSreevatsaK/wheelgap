@@ -391,8 +391,10 @@ def _quoted_end(text: str, quote: str, line: int) -> int | None:
         char = text[pos]
         if char == quote:
             if quote == "'" and text[pos : pos + 2] == "''":
-                pos += 2
-                continue
+                # A one-line single-quoted doubled escape is already refused by _QUOTED_RE.
+                # Apply that conservative rule on continuations too, rather than accepting
+                # a form whose contents we cannot safely evaluate.
+                raise _NotRead(line, text)
             return pos + 1
         if quote == '"' and char == "\\":
             if pos + 1 == len(text):  # YAML's escaped line break
@@ -414,8 +416,10 @@ def _value(text: str, line: int) -> tuple[object, str]:
         return None, ""
     if text[0] in "'\"":
         if (m := _QUOTED_RE.match(text)) and _comment_only(text[m.end() :]):
+            _quoted_end(m.group()[1:], text[0], line)  # reject controls on single lines too
             return _Scalar(m.group()[1:-1], True, line), m.group()
         if (m := _ESCAPED_RE.match(text)) and _comment_only(text[m.end() :]):
+            _quoted_end(m.group()[1:], text[0], line)  # validate escapes on single lines too
             return _ESCAPED, m.group()
         if _quoted_end(text[1:], text[0], line) is None:
             return _OPEN_QUOTE, text
