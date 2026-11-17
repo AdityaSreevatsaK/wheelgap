@@ -8,6 +8,16 @@ wheelgap diff old/uv.lock uv.lock -p 3.13 -t linux-aarch64,musl-aarch64
 wheelgap diff origin/main:uv.lock uv.lock -p 3.13 -t linux-aarch64   # the base branch's lockfile, no checkout needed
 ```
 
+To compare a pinned package's dependency tree between releases without a lockfile, add `--deps`:
+
+```bash
+wheelgap diff mcp==2.2.0 mcp==2.3.0 --deps -p 3.14 -t win-arm64
+```
+
+This resolves each exact package pin and its dependencies from PyPI per target; an unresolved tree
+is an error (exit 2), never a clean result. This mode accepts two exact `name==version` specs,
+not paths, URLs, ranges or marker expressions. Omit `--deps` for lockfile comparisons.
+
 It exits `1` if there are any, `0` if not, and `2` on bad input. `python -m wheelgap.diff OLD NEW` works the same way.
 
 ## Options
@@ -23,6 +33,7 @@ It exits `1` if there are any, `0` if not, and `2` on bad input. `python -m whee
 | `--distro NAME` | default glibc/musl version from a distro, e.g. `--distro ubuntu-22.04`; doesn't select `-t`, and an explicit `--glibc` or `--musl` wins over it |
 | `--macos X.Y` | minimum macOS for `macos-*` targets (default: 14.0) |
 | `--json` | print one JSON object instead of the text report |
+| `--deps` | resolve and compare the full trees of two pinned PyPI package specs |
 
 The same `-p` and `-t` apply to both lockfiles. `[tool.wheelgap]` and `.python-version` aren't read yet, so pass them
 explicitly. `--advisory` doesn't work with `wheelgap diff` yet.
