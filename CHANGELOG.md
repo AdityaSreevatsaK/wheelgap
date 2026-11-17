@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `wheelgap diff PKG==OLD PKG==NEW --deps` now resolves and compares both complete dependency trees against PyPI, reporting new or worsened transitive wheel gaps as with lockfiles. (issue #402, @AdityaSreevatsaK; upstream PR number pending)
+
 - `--fix` lists the gaps a wheel on wheelgap's [gap wheel index](https://wheelgap.github.io/wheels/) fills, with how to install it: a `pyproject.toml` snippet for a uv.lock (and which packages to also list as direct dependencies, since uv applies `[tool.uv.sources]` only to direct ones), or the `--extra-index-url` line for pip. Only for packages positively from PyPI, exactly the checked version and a wheel the target accepts; it reads the list in one request that names no package, and never changes the exit code. `--json` gets a `gap_wheels` key. (#472, thanks [@patrickballard](https://github.com/patrickballard))
 - `--explain` can infer issue links from Codeberg and GitLab repository URLs, skipping site pages such as `gitlab.com/explore/projects`; a nested GitLab project is linked only when its URL has the `/-/` part that marks where the project path ends. A source URL with `..`, `%` or `\` in its path no longer gives a link on any host. (#470, thanks [@Gorkem-Taha](https://github.com/Gorkem-Taha))
 - SARIF gap messages name the direct dependency that brings in a transitive package, per target (`cryptography 50.0.2 (via mcp) builds from source on win-arm64.`), as `--junit` does. (#469, thanks [@CyberKun](https://github.com/CyberKun))
