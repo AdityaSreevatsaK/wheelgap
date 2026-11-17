@@ -360,6 +360,33 @@ report or package names) it gives the `pip install --extra-index-url` command; f
 `--fix` section, since that lockfile's own tool has to pick the index up. With `--json`, each package gets
 [`gap_wheel`](output.md#fix).
 
+### `--print-gap-wheel-snippet` {#print-gap-wheel-snippet}
+
+**Print-only design step for #467:** combine with `--fix` to print *only* a copyable configuration snippet for
+the project, rather than the normal wheel coverage report. It never writes, overwrites or guesses a file path;
+the original `--fix` still explains the matched gaps. The exit status remains the original wheel-coverage
+status, so a gap may still exit 1 even when a snippet was printed. This flag has no JSON or Markdown form.
+
+- For `requirements.txt` or pinned package names, stdout contains an `--extra-index-url` line suitable for
+  review before adding to a pip requirements file. Comments warn about pip's dependency-confusion risk and the
+  extra hashes needed when requirements enforce `--require-hashes`.
+- For `uv.lock`, stdout contains TOML for `[[tool.uv.index]]` with `explicit = true` and only the matching
+  packages in `[tool.uv.sources]`, with warnings for transitive dependencies. **Merge**, do not duplicate, any
+  existing tables, then regenerate `uv.lock` with `uv lock`.
+- For other or mixed input types, including a standalone `pyproject.toml`, an existing non-uv lockfile and pip
+  reports, it refuses to guess a configuration and returns an input error. Use the normal `--fix` explanation
+  instead. When no published wheel matches an exact PyPI gap, stdout is empty.
+
+Examples:
+
+```console
+wheelgap requirements.txt -p 3.14t -t win-arm64 --fix --print-gap-wheel-snippet
+wheelgap uv.lock -p 3.14t -t win-arm64 --fix --print-gap-wheel-snippet
+```
+
+The command remains opt-in and subject to the same private-index, offline, exact-wheel and cache restrictions
+as `--fix`. It does not add indices to `pip.conf` or Dockerfiles and does not change project files.
+
 ### `-q`, `--quiet`, `--no-quiet` {#quiet}
 
 Print only the gap summary and the affected package names. Clean runs without ignored packages are silent, and JSON
