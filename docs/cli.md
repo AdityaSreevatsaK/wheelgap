@@ -2,7 +2,7 @@
 
 ```text
 wheelgap [OPTIONS] [INPUT ...]
-wheelgap diff [-p VER] [-t PLATFORM] [--glibc X.Y] [--musl X.Y] [--distro NAME] [--macos X.Y] [--json] OLD NEW
+wheelgap diff [-p VER] [-t PLATFORM] [--glibc X.Y] [--musl X.Y] [--distro NAME] [--macos X.Y] [--json] [--deps] OLD NEW
 wheelgap mcp            (or wheelgap-mcp)
 ```
 
@@ -460,7 +460,7 @@ Show the flags and some examples, then exit.
 ### `wheelgap diff` {#diff}
 
 Compare two lockfiles, or two pinned PyPI package versions with `--deps`: which packages got worse on a target,
-and which new packages have gaps. It takes `-p`, `-t`, `--json`, `--glibc`, `--musl`, `--distro` and `--macos`.
+and which new packages have gaps. It takes `-p`, `-t`, `--json`, `--glibc`, `--musl`, `--distro`, `--macos` and `--deps`.
 See [Comparing two lockfiles](diff.md).
 
 ### `wheelgap mcp` {#mcp}

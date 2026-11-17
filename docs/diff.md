@@ -58,6 +58,10 @@ Both lockfiles are checked and packages are matched by name. Per target:
   package counts as a new gap, except a uv `virtual` project, which installs nothing.
 - A package listed more than once (a `uv.lock` fork) takes its worst status on each target.
 
+With a dependency graph (`uv.lock`, Poetry 1.x, or `--deps`), a new or worse transitive package that builds from source or is
+missing names the direct dependency that brings it in, as the main command's table does: `cryptography (via mcp)`,
+or `(via mcp +1)` when more than one does. The Action's PR comment shows the same.
+
 A requirements-file path with no name (`./pkg`, or `-e ./pkg` without `#egg=`) is matched by its path, so it shows up
 as a new package rather than as the one it replaced.
 
@@ -80,6 +84,8 @@ it at that ref, if any), so its format is detected and read as usual. `PATH` is 
   `new_status` for each target where it got worse;
 - `new`: each new package's `name`, its `versions` list, and `targets`, with the `status` for each target where it
   has a gap;
+- `direct` (on `worse` and `new` entries, only when known): per target label, the direct dependencies that bring the
+  package in; absent for a direct dependency or an input without a dependency graph;
 - `unchecked`: the names of packages that were `unknown` on both sides of a target at the same version, so neither
   side could be checked there;
 - `summary`: the `worse` and `new` counts.

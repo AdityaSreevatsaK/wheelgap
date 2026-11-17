@@ -813,8 +813,9 @@ def test_diff_deps_detects_a_new_transitive_gap_on_upgrade(index, monkeypatch, c
     assert report["summary"] == {"worse": 0, "new": 1}
     assert report["new"][0]["name"] == "crypt"
     assert report["new"][0]["targets"]["win-arm64"]["status"] == "source"
+    assert report["new"][0]["direct"] == {"win-arm64": ["upgrade"]}
     assert diff_main(args) == 1
-    assert "crypt 1.0 (new)" in capsys.readouterr().out
+    assert "crypt (via upgrade) 1.0 (new)" in capsys.readouterr().out
 
 
 def test_diff_deps_comparing_same_version_has_no_regression(index, capsys):
@@ -850,6 +851,15 @@ def test_diff_deps_resolver_refusal_exits_2(index, monkeypatch, capsys):
     monkeypatch.setitem(INDEX, "xy", {"1.0": release(["x", "y"])})
     assert diff_main(["app==1.0", "xy==1.0", "--deps", "-p", "3.14", "-t", "win-arm64", "--json"]) == 2
     assert json.loads(capsys.readouterr().out)["error"]["type"] == "DepsError"
+
+
+def test_diff_deps_a_release_pypi_lacks_exits_2(index, capsys):
+    from wheelgap.diff import main as diff_main
+
+    assert diff_main(["app==1.0", "app==9.9", "--deps", "-p", "3.14", "-t", "win-arm64", "--json"]) == 2
+    error = json.loads(capsys.readouterr().out)["error"]
+    assert error["type"] == "SourceError"
+    assert "app==9.9" in error["message"]
 
 
 def test_diff_deps_unreadable_dependencies_compare_as_unknown(index, capsys):

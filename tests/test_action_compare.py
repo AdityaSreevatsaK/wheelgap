@@ -171,6 +171,19 @@ def test_new_gaps_alone_are_not_nothing_worse(tmp_path, capsys):
     assert "Nothing got worse" not in capsys.readouterr().out
 
 
+def test_rows_name_the_direct_dependency_per_target():
+    worse = worse_entry()
+    worse["direct"] = {"linux-x86_64": ["Parent_A", "parent-b"]}
+    new = new_entry()
+    new["direct"] = {"linux-x86_64": ["mcp"], "win-amd64": ["other"]}
+    worse_row, new_row = ac.rows(diff_report(worse=[worse], new=[new]))
+    assert worse_row.startswith("<tr><td><code>armlib</code> (via <code>Parent&#95;A</code> +1)</td>")
+    assert new_row.startswith("<tr><td><code>nativeext</code> (via <code>mcp</code>)</td>")
+    # A malformed value is ignored rather than printed.
+    new["direct"] = {"linux-x86_64": [1]}
+    assert ac.rows(diff_report(new=[new]))[0].startswith("<tr><td><code>nativeext</code></td>")
+
+
 def test_skip_reason_is_escaped_in_code():
     row = ac.rows(diff_report(worse=[worse_entry(new_status="skipped", new_skip_reason="git@evil|x")]))[0]
     assert "<td>✓ → skipped (<code>git&#64;evil&#124;x</code>)</td>" in row

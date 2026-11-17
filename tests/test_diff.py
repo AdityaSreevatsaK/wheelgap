@@ -7,7 +7,7 @@ import pytest
 
 from wheelgap.api import Result, make_targets
 from wheelgap.check import Status
-from wheelgap.diff import git_ref_input, main, merge, worse
+from wheelgap.diff import compare, git_ref_input, main, merge, worse
 
 TARGET = ["-p", "3.13", "-t", "linux-x86_64"]
 TWO_TARGETS = ["-p", "3.13", "-t", "linux-x86_64", "-t", "win-amd64"]
@@ -641,3 +641,70 @@ def test_diff_git_ref_brings_uv_toml_along(fake_pypi, tmp_path, monkeypatch, cap
     monkeypatch.chdir(tmp_path)
     assert main(["HEAD:uv.lock", "uv.lock", *TARGET]) == 0
     assert capsys.readouterr().out.splitlines() == ["Nothing got worse."]
+
+
+def test_diff_reports_origins_only_for_worsened_targets():
+    targets = make_targets("3.13", ["linux-x86_64", "win-amd64"])
+    linux, windows = targets
+    was = merge([Result("transitive", "1.0", {linux: Status.WHEEL, windows: Status.WHEEL})], targets)
+    now = merge(
+        [
+            Result(
+                "transitive",
+                "1.1",
+                {linux: Status.SOURCE, windows: Status.WHEEL},
+                direct={linux: ("parent",), windows: ("another-parent",)},
+            )
+        ],
+        targets,
+    )
+    report = compare(was, now, targets)
+    assert report.lines[0] == "transitive (via parent) 1.0 → 1.1"
+    assert report.worse[0]["direct"] == {"linux-x86_64": ["parent"]}
+    # No hint for unchanged targets, even if they have provenance.
+    assert "win-amd64" not in report.worse[0]["direct"]
+
+
+def test_diff_hint_keeps_the_lockfile_spelling_and_counts_other_parents():
+    (target,) = make_targets("3.13", "linux-x86_64")
+    now = merge(
+        [Result("NoWheels", "0.9", {target: Status.SOURCE}, direct={target: ("Parent_A", "parent-b")})],
+        [target],
+    )
+    report = compare({}, now, [target])
+    assert report.lines[0] == "NoWheels (via Parent_A +1) 0.9 (new)"
+    assert report.new[0]["direct"] == {"linux-x86_64": ["Parent_A", "parent-b"]}
+
+
+def test_diff_direct_package_does_not_invent_provenance():
+    (target,) = make_targets("3.13", "linux-x86_64")
+    report = compare(
+        {},
+        merge([Result("direct", "1.0", {target: Status.SOURCE})], [target]),
+        [target],
+    )
+    assert report.lines[0] == "direct 1.0 (new)"
+    assert "direct" not in report.new[0]
+
+
+def test_diff_uv_lock_new_transitive_gap_names_its_direct_owner(fake_pypi, tmp_path, capsys):
+    old = uv_lock(['{ name = "purewheel" }']) + UV_PUREWHEEL
+    newly_depends = UV_PUREWHEEL.replace("wheels = [", 'dependencies = [{ name = "NoWheels" }]\nwheels = [', 1)
+    no_wheels = (
+        '[[package]]\nname = "NoWheels"\nversion = "0.9"\n'
+        'source = { registry = "https://pypi.org/simple" }\n'
+        'sdist = { url = "https://files.pythonhosted.org/packages/nowheels-0.9.tar.gz", '
+        'hash = "sha256:00", size = 1 }\n'
+    )
+    new = uv_lock(['{ name = "purewheel" }']) + newly_depends + no_wheels
+    old_dir, new_dir = tmp_path / "old", tmp_path / "new"
+    old_dir.mkdir()
+    new_dir.mkdir()
+    (old_dir / "uv.lock").write_text(old, encoding="utf-8")
+    (new_dir / "uv.lock").write_text(new, encoding="utf-8")
+    assert main([str(old_dir), str(new_dir), *TARGET, "--json"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    assert len(report["new"]) == 1
+    assert report["new"][0]["direct"] == {"linux-x86_64": ["purewheel"]}
+    assert main([str(old_dir), str(new_dir), *TARGET]) == 1
+    assert "NoWheels (via purewheel) 0.9 (new)" in capsys.readouterr().out
