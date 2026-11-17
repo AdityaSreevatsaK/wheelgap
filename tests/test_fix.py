@@ -535,20 +535,33 @@ def test_print_only_empty_for_unmatched_wheel(capsys, fake_pypi, gap_wheels):
 
 def test_print_only_refuses_unrecognised_lock_kind_without_guessing():
     target = build_targets(["3.14t"], ["win-arm64"])[0]
-    wheel = gapwheels.parse({"schema": 1, "wheels": [{
-        "name": "nowheels", "version": "0.9", "wheel": FT_WHEEL, "sha256": "a" * 64,
-    }]})[0]
+    wheel = gapwheels.parse(
+        {
+            "schema": 1,
+            "wheels": [
+                {
+                    "name": "nowheels",
+                    "version": "0.9",
+                    "wheel": FT_WHEEL,
+                    "sha256": "a" * 64,
+                }
+            ],
+        }
+    )[0]
     row = Row(Package("nowheels", "0.9"), {target: Status.SOURCE})
     fill = gapwheels.Fill(row, target, wheel, Source("poetry.lock", kind="poetry"))
     assert gapwheels.project_snippet_lines([fill]) is None
     assert gapwheels.project_snippet_lines([]) == []
 
 
-@pytest.mark.parametrize("args", [
-    ["--print-gap-wheel-snippet"],
-    ["--fix", "--print-gap-wheel-snippet", "--json"],
-    ["--fix", "--print-gap-wheel-snippet", "--markdown"],
-])
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["--print-gap-wheel-snippet"],
+        ["--fix", "--print-gap-wheel-snippet", "--json"],
+        ["--fix", "--print-gap-wheel-snippet", "--markdown"],
+    ],
+)
 def test_print_only_requires_fix_and_plain_text(capsys, args):
     with pytest.raises(SystemExit) as error:
         cli.main([*NOWHEELS, *args])
