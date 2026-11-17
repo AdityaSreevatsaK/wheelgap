@@ -491,7 +491,7 @@ def test_no_cache_does_not_save_the_gap_wheel_list(capsys, fake_pypi, gap_wheels
 
 def test_print_only_pip_snippet_does_not_modify_project(capsys, fake_pypi, gap_wheels, tmp_path):
     requirements = tmp_path / "requirements.txt"
-    original = "nowheels==0.9\\n"
+    original = "nowheels==0.9\n"
     requirements.write_text(original, encoding="utf-8")
     gap_wheels.add("nowheels", "0.9", FT_WHEEL)
     code, stdout, _ = run(
@@ -499,7 +499,7 @@ def test_print_only_pip_snippet_does_not_modify_project(capsys, fake_pypi, gap_w
     )
     assert code == 1
     assert stdout.startswith("# requirements.txt (pip):")
-    assert stdout.count(f"--extra-index-url {INDEX}\\n") == 1
+    assert stdout.count(f"--extra-index-url {INDEX}\n") == 1
     assert "# For --require-hashes, add --hash=sha256:" in stdout
     assert "wheelgap's gap wheel index has wheels" not in stdout
     assert requirements.read_text(encoding="utf-8") == original
