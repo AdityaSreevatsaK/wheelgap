@@ -1,4 +1,4 @@
-"""Compare two lockfiles: which packages got worse on a target, and which new packages have gaps.
+"""Compare two lockfiles, or two pinned releases with --deps: which packages got worse, and which new ones have gaps.
 
     wheelgap diff old/uv.lock uv.lock -p 3.13 -t linux-aarch64,musl-aarch64
     python -m wheelgap.diff old/uv.lock uv.lock -p 3.13 -t linux-aarch64 --json
@@ -365,9 +365,10 @@ def _main(argv: list[str] | None, prog: str) -> int:
     p.add_argument(
         "old",
         metavar="OLD",
-        help="the lockfile before the change (or a directory, or git's REF:PATH, e.g. origin/main:uv.lock)",
+        help="the lockfile before the change (or a directory, or git's REF:PATH, e.g. origin/main:uv.lock; "
+        "with --deps, a pinned name==1.2)",
     )
-    p.add_argument("new", metavar="NEW", help="the lockfile after the change (or a directory, or REF:PATH)")
+    p.add_argument("new", metavar="NEW", help="the lockfile after the change (in the same forms)")
     p.add_argument(
         "-p",
         "--python",
@@ -422,18 +423,18 @@ def _main(argv: list[str] | None, prog: str) -> int:
                     f"--deps resolves from PyPI, but {index_variable} may point to another index; "
                     "unset it or compare lockfiles instead"
                 )
-            for spec in (args.old, args.new):
+            pins = []
+            for spec in (args.old, args.new):  # both checked before either is looked up
                 if Path(spec).exists():
                     raise SourceError(
                         "--deps takes two pinned package specs, not local files; omit --deps for lockfiles"
                     )
-                name, version = _pinned_spec(spec)
-                results = check_packages([(name, version)], targets, deps=True)
-                if any(status is Status.UNKNOWN for result in results for status in result.statuses.values()):
-                    raise SourceError(
-                        f"--deps couldn't fully resolve {spec!r} for every requested target; compare a lockfile instead"
-                    )
-                sides.append(merge(results, targets))
+                pins.append(_pinned_spec(spec))
+            for pin in pins:
+                # A resolver refusal raises DepsError (exit 2); a package it couldn't read is `unknown`, which
+                # compares as it does for lockfiles.
+                sides.append(merge(check_packages([pin], targets, deps=True), targets))
+                # rows stays empty: comment suggestions are only for lockfiles.
                 sources.append(Source("api", pypi_only=True))
         else:
             with tempfile.TemporaryDirectory(prefix="wheelgap-diff-") as tmp:

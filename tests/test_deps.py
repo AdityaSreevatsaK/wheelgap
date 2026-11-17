@@ -844,10 +844,45 @@ def test_diff_deps_rejects_unpinned_and_non_index_inputs_before_lookup(index, ca
     assert "SourceError" in json.loads(capsys.readouterr().out)["error"]["type"]
 
 
-def test_diff_deps_reports_resolution_failure_instead_of_success(index, capsys):
+def test_diff_deps_resolver_refusal_exits_2(index, monkeypatch, capsys):
     from wheelgap.diff import main as diff_main
 
-    assert diff_main(["app==1.0", "nometa==1.0", "--deps", "-p", "3.14", "-t", "win-arm64", "--json"]) == 2
+    monkeypatch.setitem(INDEX, "xy", {"1.0": release(["x", "y"])})
+    assert diff_main(["app==1.0", "xy==1.0", "--deps", "-p", "3.14", "-t", "win-arm64", "--json"]) == 2
+    assert json.loads(capsys.readouterr().out)["error"]["type"] == "DepsError"
+
+
+def test_diff_deps_unreadable_dependencies_compare_as_unknown(index, capsys):
+    from wheelgap.diff import main as diff_main
+
+    assert diff_main(["app==1.0", "nometa==1.0", "--deps", "-p", "3.14", "-t", "win-arm64", "--json"]) == 1
     report = json.loads(capsys.readouterr().out)
-    assert "error" in report
-    assert report["error"]["type"] in {"DepsError", "SourceError"}
+    nometa = next(p for p in report["new"] if p["name"] == "nometa")
+    assert nometa["targets"]["win-arm64"]["status"] == "unknown"
+
+
+def test_diff_deps_reports_a_dependency_that_got_worse(index, monkeypatch, capsys):
+    from wheelgap.diff import main as diff_main
+
+    monkeypatch.setitem(INDEX, "dep", {"1.0": release(files=(WIN_ARM,)), "2.0": release(files=(LINUX,))})
+    monkeypatch.setitem(INDEX, "up", {"1.0": release(["dep==1.0"]), "2.0": release(["dep==2.0"])})
+    assert diff_main(["up==1.0", "up==2.0", "--deps", "-p", "3.14", "-t", "win-arm64", "--json"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    assert report["summary"] == {"worse": 1, "new": 0}
+    assert report["worse"][0]["name"] == "dep"
+    assert report["worse"][0]["targets"]["win-arm64"] == {"old_status": "wheel", "new_status": "source"}
+
+
+def test_diff_deps_extras_and_index_variables(index, monkeypatch, capsys):
+    from wheelgap.diff import main as diff_main
+
+    monkeypatch.setitem(INDEX, "base", {"1.0": release(), "2.0": release(['crypt>=1; extra == "fast"'])})
+    args = ["base==1.0", "base[fast]==2.0", "--deps", "-p", "3.14", "-t", "win-arm64", "--json"]
+    assert diff_main(args) == 1
+    assert [p["name"] for p in json.loads(capsys.readouterr().out)["new"]] == ["crypt"]
+    # A bad NEW spec is refused too.
+    assert diff_main(["base==1.0", "base>=2", "--deps", "--json"]) == 2
+    assert json.loads(capsys.readouterr().out)["error"]["type"] == "SourceError"
+    monkeypatch.setenv("UV_INDEX_URL", "https://example.com/simple")
+    assert diff_main(args) == 2
+    assert json.loads(capsys.readouterr().out)["error"]["type"] == "SourceError"

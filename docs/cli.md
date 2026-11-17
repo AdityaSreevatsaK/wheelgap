@@ -461,7 +461,7 @@ Show the flags and some examples, then exit.
 
 Compare two lockfiles, or two pinned PyPI package versions with `--deps`: which packages got worse on a target,
 and which new packages have gaps. It takes `-p`, `-t`, `--json`, `--glibc`, `--musl`, `--distro` and `--macos`.
-See [Comparing lockfiles and resolved dependency trees](diff.md).
+See [Comparing two lockfiles](diff.md).
 
 ### `wheelgap mcp` {#mcp}
 
