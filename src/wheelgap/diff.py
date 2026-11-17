@@ -107,10 +107,7 @@ def merge(results: list[Result], targets: list[Target]) -> dict[str, Package]:
             # A uv fork can have multiple versions: retain the root(s) for the
             # status that won on this target rather than an unrelated fork.
             roots = dict.fromkeys(
-                name
-                for r in rs
-                if r.statuses.get(t, Status.NOT_NEEDED) is statuses[t]
-                for name in r.direct.get(t, ())
+                name for r in rs if r.statuses.get(t, Status.NOT_NEEDED) is statuses[t] for name in r.direct.get(t, ())
             )
             if roots:
                 direct[t] = tuple(roots)
