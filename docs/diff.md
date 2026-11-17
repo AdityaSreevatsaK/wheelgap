@@ -42,6 +42,11 @@ Both lockfiles are checked and packages are matched by name. Per target:
   package counts as a new gap, except a uv `virtual` project, which installs nothing.
 - A package listed more than once (a `uv.lock` fork) takes its worst status on each target.
 
+For a new or worsened transitive gap, the text report identifies the direct dependency that brings it in
+(for example, `cryptography (via mcp)`). With a dependency graph (`uv.lock`, Poetry 1.x),
+`--json` adds a `direct` mapping on affected `new` and `worse` entries, keyed by target label;
+a directly requested package has no `direct` value.
+
 A requirements-file path with no name (`./pkg`, or `-e ./pkg` without `#egg=`) is matched by its path, so it shows up
 as a new package rather than as the one it replaced.
 
