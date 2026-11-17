@@ -2235,6 +2235,7 @@ def _assert_matches_output_schema(data):
             "conda_forge",
             "suggest",
             "last_with_wheel",
+            "gap_wheel",
         }
         assert isinstance(pkg["name"], str) and pkg["name"]
         assert pkg["version"] is None or isinstance(pkg["version"], str)
@@ -2273,6 +2274,13 @@ def _assert_matches_output_schema(data):
             assert set(pkg["suggest"]) <= set(pkg["rejected"]) and all(
                 isinstance(v, str) for v in pkg["suggest"].values()
             )
+        if "gap_wheel" in pkg:
+            assert set(pkg["gap_wheel"]) <= set(pkg.get("rejected", {}))
+            for label, wheel in pkg["gap_wheel"].items():
+                assert pkg["results"][label] in ("source", "missing")
+                assert wheel["index"] == gapwheels.INDEX
+                assert wheel["sha256"] and wheel["wheel"].endswith(".whl")
+                assert wheel["install"].startswith("pip install --extra-index-url ")
         if "last_with_wheel" in pkg:  # an older release for gap targets no newer one has a wheel for
             assert "suggest" in pkg and not set(pkg["last_with_wheel"]) & set(pkg["suggest"])
             assert set(pkg["last_with_wheel"]) <= set(pkg["rejected"])
