@@ -39,13 +39,14 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from packaging.requirements import InvalidRequirement, Requirement
 from packaging.utils import InvalidName, canonicalize_name
 
 from . import __version__, origin, suggest
-from .api import Result, _check_lockfile, make_targets
+from .api import Result, _check_lockfile, check_packages, make_targets
 from .check import CELL, Row, Status, applies, reachable
 from .logsafe import guarded_output
-from .sources import Source
+from .sources import Source, SourceError
 from .targets import DEFAULT_GLIBC, DEFAULT_MACOS, DEFAULT_MUSL, Target, next_python_note, resolve_distro
 
 # Higher is worse. UNKNOWN only orders entries of the same package on one target (see the module docstring).
@@ -291,6 +292,22 @@ def git_ref_input(arg: str) -> tuple[str, str] | None:
     return ref, path
 
 
+def _pinned_spec(text: str) -> tuple[str, str]:
+    """A single exact requirement for --deps, not a path, range, URL or unpinned name."""
+    try:
+        req = Requirement(text)
+    except InvalidRequirement:
+        raise SourceError(f"--deps needs a pinned package spec such as name==1.2, not {text!r}") from None
+    specs = list(req.specifier)
+    if req.url is not None or req.marker is not None or len(specs) != 1:
+        raise SourceError(f"--deps needs an exact PyPI package version (name==1.2), not {text!r}")
+    (spec,) = specs
+    if spec.operator != "==" or "*" in spec.version:
+        raise SourceError(f"--deps needs an exact PyPI package version (name==1.2), not {text!r}")
+    name = req.name + (f"[{','.join(sorted(req.extras))}]" if req.extras else "")
+    return name, spec.version
+
+
 def _git_blob(ref: str, path: str) -> subprocess.CompletedProcess[bytes]:
     # `git cat-file blob`: plumbing, so no textconv, filters or pager, and a tree (a folder) is refused rather
     # than listed. An argument list, never a shell, and --end-of-options keeps a ref that starts with `-` from
@@ -372,6 +389,10 @@ def _main(argv: list[str] | None, prog: str) -> int:
     )
     p.add_argument("--macos", metavar="X.Y", help=f"minimum macOS for macos-* targets (default: {DEFAULT_MACOS})")
     p.add_argument("--json", action="store_true", help="print one JSON object instead of the text report")
+    p.add_argument(
+        "--deps", action="store_true",
+        help="resolve two pinned PyPI package specs and compare their full dependency trees",
+    )
     args = p.parse_args(argv)
     try:
         # Match cli.py precedence: explicit --glibc / --musl wins over --distro.
@@ -394,20 +415,32 @@ def _main(argv: list[str] | None, prog: str) -> int:
         sides = []
         sources = []
         rows: list[Row] = []
-        with tempfile.TemporaryDirectory(prefix="wheelgap-diff-") as tmp:
-            for path in (args.old, args.new):
-                ref = git_ref_input(path)
-                if ref is not None:
-                    path = read_git_ref(*ref, Path(tmp))
-                results, source, rows = _check_lockfile(path, targets, online=False, offline=False)
-                if ref is not None:
-                    # The git snapshot brings only sibling configs. An omitted parent or pdm.toml may name an index,
-                    # so only packages with explicit PyPI provenance can be used for a comment lookup.
-                    source.pypi_only = False
-                packages = merge(results, targets)
-                add_skipped(packages, source, targets)
-                sides.append(packages)
-                sources.append(source)
+        if args.deps:
+            if (index_variable := origin.index_env()) is not None:
+                raise SourceError(
+                    f"--deps resolves from PyPI, but {index_variable} may point to another index; "
+                    "unset it or compare lockfiles instead"
+                )
+            for spec in (args.old, args.new):
+                if Path(spec).exists():
+                    raise SourceError("--deps takes two pinned package specs, not local files; omit --deps for lockfiles")
+                name, version = _pinned_spec(spec)
+                sides.append(merge(check_packages([(name, version)], targets, deps=True), targets))
+                sources.append(Source("api", pypi_only=True))
+        else:
+            with tempfile.TemporaryDirectory(prefix="wheelgap-diff-") as tmp:
+                for path in (args.old, args.new):
+                    ref = git_ref_input(path)
+                    if ref is not None:
+                        path = read_git_ref(*ref, Path(tmp))
+                    results, source, rows = _check_lockfile(path, targets, online=False, offline=False)
+                    if ref is not None:
+                        # An omitted parent or pdm.toml may name an index, so don't assume PyPI provenance.
+                        source.pypi_only = False
+                    packages = merge(results, targets)
+                    add_skipped(packages, source, targets)
+                    sides.append(packages)
+                    sources.append(source)
     except Exception as e:  # unknown targets, unreadable or malformed lockfiles, a REF:PATH git can't read
         print(f"wheelgap: error: {type(e).__name__}: {e}", file=sys.stderr)
         if args.json:  # as the main command does, so scripts needn't parse stderr
