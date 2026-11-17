@@ -592,15 +592,14 @@ def test_print_gap_wheel_snippet_refuses_other_inputs_before_any_lookup(
     [
         (["nowheels==0.9", "--print-gap-wheel-snippet"], "needs --fix"),
         ([*NOWHEELS, "--fix", "--print-gap-wheel-snippet", "--json"], "--json"),
+        ([*NOWHEELS, "--fix", "--print-gap-wheel-snippet", "--explain", "--conda-forge"], "--explain"),
+        ([*NOWHEELS, "--fix", "--print-gap-wheel-snippet", "--all"], "--all"),
         ([*NOWHEELS, "--fix", "--print-gap-wheel-snippet", "--markdown"], "--markdown"),
         ([*NOWHEELS, "--fix", "--print-gap-wheel-snippet", "--junit", "out.xml"], "--junit"),
         ([*NOWHEELS, "--fix", "--print-gap-wheel-snippet", "--sarif", "out.sarif"], "--sarif"),
         ([*NOWHEELS, "--fix", "--print-gap-wheel-snippet", "--badge", "badge.json"], "--badge"),
         ([*NOWHEELS, "--fix", "--print-gap-wheel-snippet", "--github-annotations"], "--github-annotations"),
-        (
-            [*NOWHEELS, "--fix", "--print-gap-wheel-snippet", "--explain", "--suggest", "--write-constraints", "c.txt"],
-            "--write-constraints",
-        ),
+        ([*NOWHEELS, "--fix", "--print-gap-wheel-snippet", "--write-constraints", "c.txt"], "--write-constraints"),
         (["--from-log", "LOG", *SNIPPET], "--from-log"),
         (["--dist", "dist", *SNIPPET], "--dist"),
     ],

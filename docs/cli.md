@@ -363,7 +363,7 @@ report or package names) it gives the `pip install --extra-index-url` command; f
 ### `--print-gap-wheel-snippet` {#print-gap-wheel-snippet}
 
 With [`--fix`](#fix) (**after 0.13.0**), print only the configuration that installs the gap wheels, instead of the
-usual output, for you to copy into your project. It never writes a file. Comment lines say the wheels are unofficial
+usual output, for you to copy into your project. It never writes to your project. Comment lines say the wheels are unofficial
 (built by wheelgap from the PyPI sdist, not by the package's maintainers), link to how they're built, and name each
 package and the targets it fills. The exit code is the check's own, so a run with gaps still exits 1 after printing a
 snippet; when no gap wheel fits, stdout is empty.
@@ -377,7 +377,7 @@ snippet; when no gap wheel fits, stdout is empty.
 
 It refuses, with exit code 2 and before any lookup, more than one input and any other input: `pyproject.toml`,
 `pylock.toml`, `poetry.lock`, `pdm.lock`, `Pipfile.lock`, `pixi.lock` and a pip report. Use `--fix` alone for
-those. It can't be used with `--from-log`, `--dist`, `--json`, `--markdown`, `--junit`, `--sarif`, `--badge`,
+those. It can't be used with `--explain` (and its add-ons), `--all`, `--from-log`, `--dist`, `--json`, `--markdown`, `--junit`, `--sarif`, `--badge`,
 `--write-constraints` or `--github-annotations`.
 
 ```console

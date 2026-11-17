@@ -305,7 +305,7 @@ def make_parser() -> argparse.ArgumentParser:
         "--print-gap-wheel-snippet",
         action="store_true",
         help="with --fix, print only the configuration that installs the gap wheels, for one uv.lock, requirements "
-        "file or package names (other inputs are refused); it never writes a file",
+        "file or package names (other inputs are refused); it never writes to your project",
     )
     p.add_argument(
         "-q",
@@ -1648,6 +1648,8 @@ def _main(argv: list[str], project: Path | None = None) -> int:
             for flag, value in (
                 ("--json", args.json),
                 ("--markdown", args.markdown),
+                ("--explain", args.explain),
+                ("--all", args.all),
                 ("--from-log", args.from_log is not None),
                 ("--dist", bool(args.dist)),
                 ("--junit", args.junit is not None),
