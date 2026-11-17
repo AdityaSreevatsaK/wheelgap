@@ -2,12 +2,13 @@
 conftest.py (the autouse gap_wheels fixture): never the network."""
 
 import json
+import tomllib
 import urllib.error
 
 import pytest
 from test_cli import _assert_matches_output_schema, run
 
-from wheelgap import gapwheels, pypi
+from wheelgap import cli, gapwheels, pypi
 from wheelgap.check import Row, Status
 from wheelgap.sources import Package, Source
 from wheelgap.targets import build_targets
@@ -486,3 +487,70 @@ def test_no_cache_does_not_save_the_gap_wheel_list(capsys, fake_pypi, gap_wheels
     assert gap_wheels.calls == 2  # the --no-cache run saved nothing for this one to read
     run(capsys, *NOWHEELS, "--fix")
     assert gap_wheels.calls == 2  # but this one saved it
+
+
+def test_print_only_pip_snippet_does_not_modify_project(capsys, fake_pypi, gap_wheels, tmp_path):
+    requirements = tmp_path / "requirements.txt"
+    original = "nowheels==0.9\\n"
+    requirements.write_text(original, encoding="utf-8")
+    gap_wheels.add("nowheels", "0.9", FT_WHEEL)
+    code, stdout, _ = run(
+        capsys, str(requirements), "-p", "3.14t", "-t", "win-arm64", "--fix", "--print-gap-wheel-snippet"
+    )
+    assert code == 1
+    assert stdout.startswith("# requirements.txt (pip):")
+    assert stdout.count(f"--extra-index-url {INDEX}\\n") == 1
+    assert "# For --require-hashes, add --hash=sha256:" in stdout
+    assert "wheelgap's gap wheel index has wheels" not in stdout
+    assert requirements.read_text(encoding="utf-8") == original
+    assert list(tmp_path.iterdir()) == [requirements]
+
+
+def test_print_only_uv_snippet_is_valid_toml_and_preserves_project(capsys, fixtures, gap_wheels):
+    gap_wheels.add("puresdist", "1.0", "puresdist-1.0-cp314-cp314t-win_arm64.whl")
+    gap_wheels.add("nativeext", "0.3", "nativeext-0.3-cp314-cp314t-win_arm64.whl")
+    root = fixtures / "uvproj"
+    original_lock = (root / "uv.lock").read_bytes()
+    original_project = (root / "pyproject.toml").read_bytes()
+    code, stdout, _ = run(
+        capsys, str(root / "uv.lock"), "-p", "3.14t", "-t", "win-arm64", "--fix", "--print-gap-wheel-snippet"
+    )
+    assert code == 1
+    parsed = tomllib.loads(stdout)
+    assert parsed["tool"]["uv"]["index"][0]["explicit"] is True
+    assert parsed["tool"]["uv"]["sources"]["puresdist"]["index"] == "wheelgap"
+    assert parsed["tool"]["uv"]["sources"]["nativeext"]["index"] == "wheelgap"
+    assert "# nativeext comes in through fastlib;" in stdout
+    assert "Run uv lock" in stdout
+    assert "--extra-index-url" not in stdout
+    assert (root / "uv.lock").read_bytes() == original_lock
+    assert (root / "pyproject.toml").read_bytes() == original_project
+
+
+def test_print_only_empty_for_unmatched_wheel(capsys, fake_pypi, gap_wheels):
+    gap_wheels.add("nowheels", "0.8", "nowheels-0.8-cp314-cp314t-win_arm64.whl")
+    code, stdout, _ = run(capsys, *NOWHEELS, "--fix", "--print-gap-wheel-snippet")
+    assert code == 1 and stdout == ""
+
+
+def test_print_only_refuses_unrecognised_lock_kind_without_guessing():
+    target = build_targets(["3.14t"], ["win-arm64"])[0]
+    wheel = gapwheels.parse({"schema": 1, "wheels": [{
+        "name": "nowheels", "version": "0.9", "wheel": FT_WHEEL, "sha256": "a" * 64,
+    }]})[0]
+    row = Row(Package("nowheels", "0.9"), {target: Status.SOURCE})
+    fill = gapwheels.Fill(row, target, wheel, Source("poetry.lock", kind="poetry"))
+    assert gapwheels.project_snippet_lines([fill]) is None
+    assert gapwheels.project_snippet_lines([]) == []
+
+
+@pytest.mark.parametrize("args", [
+    ["--print-gap-wheel-snippet"],
+    ["--fix", "--print-gap-wheel-snippet", "--json"],
+    ["--fix", "--print-gap-wheel-snippet", "--markdown"],
+])
+def test_print_only_requires_fix_and_plain_text(capsys, args):
+    with pytest.raises(SystemExit) as error:
+        cli.main([*NOWHEELS, *args])
+    assert error.value.code == 2
+    assert "--print-gap-wheel-snippet" in capsys.readouterr().err
