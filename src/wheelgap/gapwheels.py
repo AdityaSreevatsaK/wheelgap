@@ -112,7 +112,7 @@ def look_up(*, read_cache: bool = True, write_cache: bool = True) -> list[GapWhe
     except Exception:  # unreachable, timeout, oversized or malformed JSON...
         return None
     wheels = parse(data)
-    if wheels is not None and write_cache:
+    if wheels and write_cache:
         cache.save_gap_wheels(data)
     return wheels
 
