@@ -521,7 +521,7 @@ def test_print_only_uv_snippet_is_valid_toml_and_preserves_project(capsys, fixtu
     assert parsed["tool"]["uv"]["sources"]["puresdist"]["index"] == "wheelgap"
     assert parsed["tool"]["uv"]["sources"]["nativeext"]["index"] == "wheelgap"
     assert "# nativeext comes in through fastlib;" in stdout
-    assert "Run uv lock" in stdout
+    assert "run uv lock" in stdout
     assert "--extra-index-url" not in stdout
     assert (root / "uv.lock").read_bytes() == original_lock
     assert not (root / "pyproject.toml").exists()
