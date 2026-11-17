@@ -312,35 +312,37 @@ LOCK_CAVEAT = (
 UV_MERGE = "If pyproject.toml already has a [tool.uv.sources] table, add these lines to it instead of a second one."
 
 
-def project_snippet_lines(fills: list[Fill]) -> list[str] | None:
-    """Print-only first step for #467: copyable configuration, never a file mutation.
+# The inputs --print-gap-wheel-snippet takes, one at a time: a uv.lock, a requirements file, or package names on the
+# command line (kind None; the CLI refuses --from-log and --dist, the other inputs of that kind, before this).
+SNIPPET_KINDS = ("uv", "requirements", None)
 
-    An empty list means no exact wheel matched. None means the input type (or mixed
-    input types) has no unambiguous, safe snippet; --fix still explains those inputs.
-    The CLI prints these lines alone, so users can review or redirect them themselves.
-    """
+
+def project_snippet_lines(fills: list[Fill], source: Source, multi_py: bool) -> list[str]:
+    """--fix --print-gap-wheel-snippet: the configuration alone, to copy by hand (nothing is written), for `source`,
+    one of SNIPPET_KINDS (the CLI refuses the rest before checking). Empty when no gap wheel fills a gap."""
     if not fills:
         return []
-    kinds = {f.source.kind for f in fills}
-    if kinds == {"uv"}:
-        _, config, notes, _ = _parts(fills, False)
+    listed, config, notes, _ = _parts(fills, multi_py)
+    about = [f"# Gap wheels are {UNOFFICIAL}: {ABOUT}", *(f"# fills: {line}" for line in listed)]
+    if source.kind == "uv":
         return [
-            "# pyproject.toml (uv): review and merge these entries with existing tables; do not duplicate tables.",
+            f"# {source.uv_pyproject or 'pyproject.toml'} (uv): add this, then run uv lock.",
+            *about,
             *config,
             *(f"# {note}." for note in notes),
-            "# After reviewing, run uv lock to regenerate uv.lock.",
+            f"# {UV_MERGE}",
         ]
-    if kinds.issubset({"requirements", None}):
-        return [
-            "# requirements.txt (pip): review index trust before copying; no file has been changed.",
-            "# pip searches extra indexes alongside PyPI: do not use where private names could collide.",
-            f"--extra-index-url {INDEX}",
-            *(
-                f"# For --require-hashes, add --hash=sha256:{sha} to the existing {req} line."
-                for req, sha in _hashes(fills)
-            ),
-        ]
-    return None  # Other lockfiles, pyproject-only, pip reports or mixed inputs: don't guess.
+    where = "add this line to it" if source.kind == "requirements" else "add this line to a requirements file"
+    return [
+        f"# {source.label} (pip): {where}, or pass it to pip install.",
+        *about,
+        f"# {PIP_CAVEAT}",
+        f"--extra-index-url {INDEX}",
+        *(
+            f"# If the requirements pin hashes, add --hash=sha256:{sha} to the {req} line."
+            for req, sha in _hashes(fills)
+        ),
+    ]
 
 
 def text_lines(fills: list[Fill], multi_py: bool) -> list[str]:

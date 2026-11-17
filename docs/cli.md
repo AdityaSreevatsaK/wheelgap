@@ -362,30 +362,28 @@ report or package names) it gives the `pip install --extra-index-url` command; f
 
 ### `--print-gap-wheel-snippet` {#print-gap-wheel-snippet}
 
-**Print-only design step for #467:** combine with `--fix` to print *only* a copyable configuration snippet for
-the project, rather than the normal wheel coverage report. It never writes, overwrites or guesses a file path;
-the original `--fix` still explains the matched gaps. The exit status remains the original wheel-coverage
-status, so a gap may still exit 1 even when a snippet was printed. This flag has no JSON or Markdown form.
+With [`--fix`](#fix) (**after 0.13.0**), print only the configuration that installs the gap wheels, instead of the
+usual output, for you to copy into your project. It never writes a file. Comment lines say the wheels are unofficial
+(built by wheelgap from the PyPI sdist, not by the package's maintainers), link to how they're built, and name each
+package and the targets it fills. The exit code is the check's own, so a run with gaps still exits 1 after printing a
+snippet; when no gap wheel fits, stdout is empty.
 
-- For `requirements.txt` or pinned package names, stdout contains an `--extra-index-url` line suitable for
-  review before adding to a pip requirements file. Comments warn about pip's dependency-confusion risk and the
-  extra hashes needed when requirements enforce `--require-hashes`.
-- For `uv.lock`, stdout contains TOML for `[[tool.uv.index]]` with `explicit = true` and only the matching
-  packages in `[tool.uv.sources]`, with warnings for transitive dependencies. **Merge**, do not duplicate, any
-  existing tables, then regenerate `uv.lock` with `uv lock`.
-- For other or mixed input types, including a standalone `pyproject.toml`, an existing non-uv lockfile and pip
-  reports, it refuses to guess a configuration and returns an input error. Use the normal `--fix` explanation
-  instead. When no published wheel matches an exact PyPI gap, stdout is empty.
+- For one requirements file or package names on the command line: the `--extra-index-url` line, with pip's
+  dependency-confusion caveat, and for each wheel the `--hash=sha256:` to add to its line if the requirements pin
+  hashes.
+- For one uv.lock: the `[[tool.uv.index]]` (with `explicit = true`) and `[tool.uv.sources]` entries for
+  `pyproject.toml`, with a note for each package uv won't take from the index until it's listed as a direct
+  dependency. Add them to an existing `[tool.uv.sources]` table rather than a second one, then run `uv lock`.
 
-Examples:
+It refuses, with exit code 2 and before any lookup, more than one input and any other input: `pyproject.toml`,
+`pylock.toml`, `poetry.lock`, `pdm.lock`, `Pipfile.lock`, `pixi.lock` and a pip report. Use `--fix` alone for
+those. It can't be used with `--from-log`, `--dist`, `--json`, `--markdown`, `--junit`, `--sarif`, `--badge`,
+`--write-constraints` or `--github-annotations`.
 
 ```console
 wheelgap requirements.txt -p 3.14t -t win-arm64 --fix --print-gap-wheel-snippet
 wheelgap uv.lock -p 3.14t -t win-arm64 --fix --print-gap-wheel-snippet
 ```
-
-The command remains opt-in and subject to the same private-index, offline, exact-wheel and cache restrictions
-as `--fix`. It does not add indices to `pip.conf` or Dockerfiles and does not change project files.
 
 ### `-q`, `--quiet`, `--no-quiet` {#quiet}
 
