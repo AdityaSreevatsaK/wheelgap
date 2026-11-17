@@ -21,6 +21,8 @@ Point it at your lockfile and the platforms you ship to (ARM servers, Alpine ima
 
 📖 **Documentation: [wheelgap.github.io/wheelgap](https://wheelgap.github.io/wheelgap/)**, with a reference for every [flag](https://wheelgap.github.io/wheelgap/cli/), [input format](https://wheelgap.github.io/wheelgap/inputs/), [config key](https://wheelgap.github.io/wheelgap/configuration/) and [output format](https://wheelgap.github.io/wheelgap/output/).
 
+With `--explain --fix`, a gap can also name an independently published unofficial wheel that fits the exact Python/platform target and how to install it. `--json --explain --fix` includes per-package `gap_wheel` entries; wheel coverage results do not change.
+
 ## Install and run (under 30 seconds)
 
 With [uv](https://docs.astral.sh/uv/):
