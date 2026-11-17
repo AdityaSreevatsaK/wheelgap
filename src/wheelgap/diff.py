@@ -69,6 +69,8 @@ class Package:
     versions: list[str]
     statuses: dict[Target, Status]
     skips: dict[Target, str] = field(default_factory=dict)
+    # Direct requirements responsible for each target's gap on the new side.
+    direct: dict[Target, tuple[str, ...]] = field(default_factory=dict)
 
     @property
     def version(self) -> str:
@@ -100,7 +102,19 @@ def merge(results: list[Result], targets: list[Target]) -> dict[str, Package]:
             needed = [s for s in found if s is not Status.NOT_NEEDED]
             statuses[t] = max(needed, key=RANK.__getitem__) if needed else Status.NOT_NEEDED
         versions = list(dict.fromkeys(r.version for r in rs if r.version))
-        merged[key] = Package(rs[0].name, versions, statuses)
+        direct: dict[Target, tuple[str, ...]] = {}
+        for t in targets:
+            # A uv fork can have multiple versions: retain the root(s) for the
+            # status that won on this target rather than an unrelated fork.
+            roots = dict.fromkeys(
+                name
+                for r in rs
+                if r.statuses.get(t, Status.NOT_NEEDED) is statuses[t]
+                for name in r.direct.get(t, ())
+            )
+            if roots:
+                direct[t] = tuple(roots)
+        merged[key] = Package(rs[0].name, versions, statuses, direct=direct)
     return merged
 
 
@@ -160,6 +174,21 @@ def _side(pkg: Package, t: Target, prefix: str = "") -> dict[str, str]:
     return out
 
 
+def _direct(pkg: Package, targets: list[Target], multi_py: bool) -> dict[str, list[str]]:
+    """The new side's direct requirements, per changed target (omit direct packages)."""
+    return {t.label(multi_py): list(pkg.direct[t]) for t in targets if pkg.direct.get(t)}
+
+
+def _with_direct(pkg: Package, targets: list[Target]) -> str:
+    """Add the same concise provenance hint as the normal package table."""
+    roots = dict.fromkeys(canonicalize_name(name) for t in targets for name in pkg.direct.get(t, ()))
+    if not roots:
+        return pkg.name
+    first = next(iter(roots))
+    extra = f" +{len(roots) - 1}" if len(roots) > 1 else ""
+    return f"{pkg.name} (via {first}{extra})"
+
+
 def compare(before: dict[str, Package], after: dict[str, Package], targets: list[Target]) -> Report:
     """Packages that got worse and new packages with gaps, with the names that couldn't be checked at the
     same version on either side."""
@@ -169,13 +198,14 @@ def compare(before: dict[str, Package], after: dict[str, Package], targets: list
         if key not in before:
             gaps = [t for t in targets if new_gap(pkg, t)]
             if gaps:
-                report.lines.append(f"{pkg.name} {pkg.version} (new)")
+                report.lines.append(f"{_with_direct(pkg, gaps)} {pkg.version} (new)")
                 report.lines += [f"  {t.label(multi_py)}: {pkg.cell(t)}" for t in gaps]
                 report.new.append(
                     {
                         "name": pkg.name,
                         "versions": pkg.versions,
                         "targets": {t.label(multi_py): _side(pkg, t) for t in gaps},
+                        **({"direct": _direct(pkg, gaps, multi_py)} if _direct(pkg, gaps, multi_py) else {}),
                     }
                 )
             continue
@@ -188,7 +218,7 @@ def compare(before: dict[str, Package], after: dict[str, Package], targets: list
             report.unchecked.append(pkg.name)
         if changed:
             version = pkg.version if pkg.version == was.version else f"{was.version} → {pkg.version}"
-            report.lines.append(f"{pkg.name} {version}")
+            report.lines.append(f"{_with_direct(pkg, changed)} {version}")
             report.lines += [f"  {t.label(multi_py)}: {was.cell(t)} → {pkg.cell(t)}" for t in changed]
             report.worse.append(
                 {
@@ -196,6 +226,7 @@ def compare(before: dict[str, Package], after: dict[str, Package], targets: list
                     "old_versions": was.versions,
                     "new_versions": pkg.versions,
                     "targets": {t.label(multi_py): _side(was, t, "old_") | _side(pkg, t, "new_") for t in changed},
+                    **({"direct": _direct(pkg, changed, multi_py)} if _direct(pkg, changed, multi_py) else {}),
                 }
             )
     return report
