@@ -124,6 +124,8 @@ resolutions appear in separate rows, including in JSON, with `n/a` for targets u
 
 `--fix` lists the gaps a wheel on wheelgap's [gap wheel index](https://wheelgap.github.io/wheels/) fills (today Windows on ARM for CPython 3.14 and 3.14t), with the `pyproject.toml` snippet for uv or the `--extra-index-url` line for pip. It reads the index's list in one request that names no package, and never changes the exit code ([how](https://wheelgap.github.io/wheelgap/recipes/#installing-from-the-gap-wheel-index)).
 
+For a standalone snippet you can inspect before changing your project, use `--fix --print-gap-wheel-snippet` with a requirements file or `uv.lock`. It prints only matching, reviewed config to stdout; it **never writes project files**. Unsupported input types are refused rather than guessed ([flag details](https://wheelgap.github.io/wheelgap/cli/#print-gap-wheel-snippet)).
+
 The docs cover [inputs and dependency selection](https://wheelgap.github.io/wheelgap/inputs/), [`--explain`](https://wheelgap.github.io/wheelgap/output/#explain), [the `--json` schema](https://wheelgap.github.io/wheelgap/output/#json), [every flag](https://wheelgap.github.io/wheelgap/cli/) and the [recipes](https://wheelgap.github.io/wheelgap/recipes/) for multi-arch images, monorepos and free-threading readiness.
 
 ## Targets
