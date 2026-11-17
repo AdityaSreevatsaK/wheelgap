@@ -19,7 +19,7 @@ To compare a package's whole dependency tree between two releases without a lock
 wheelgap diff mcp==2.2.0 mcp==2.3.0 --deps -p 3.14 -t win-arm64
 ```
 
-Each side is resolved from PyPI per target, as [`--deps`](deps.md) does, and the two trees are compared as two
+Each side is resolved from PyPI per target, as [`--deps`](cli.md#deps) does, and the two trees are compared as two
 lockfiles are. Each spec is an exact `name==version`, with extras if you like (`mcp[cli]==2.3.0`); a path, URL,
 range or marker is refused (exit 2), and so is a pip or uv index variable such as `PIP_INDEX_URL`, since this mode
 reads PyPI only. If the resolver can't settle on releases, it exits 2 with its message; a package whose dependencies
