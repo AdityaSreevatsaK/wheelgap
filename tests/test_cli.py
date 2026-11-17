@@ -9,7 +9,7 @@ import pytest
 from test_deps import index  # noqa: F401  (the fake PyPI --deps resolves against)
 
 import wheelgap
-from wheelgap import cli, gapwheels
+from wheelgap import cli
 from wheelgap.check import Status
 from wheelgap.cli import main
 from wheelgap.targets import ALIASES, DEFAULT_PLATFORMS, PLATFORMS
@@ -2278,9 +2278,11 @@ def _assert_matches_output_schema(data):
             assert set(pkg["gap_wheel"]) <= set(pkg.get("rejected", {}))
             for label, wheel in pkg["gap_wheel"].items():
                 assert pkg["results"][label] in ("source", "missing")
-                assert wheel["index"] == gapwheels.INDEX
+                assert {"wheel", "url", "sha256"} <= set(wheel) <= {"wheel", "url", "sha256", "install"}
                 assert wheel["sha256"] and wheel["wheel"].endswith(".whl")
-                assert wheel["install"].startswith("pip install --extra-index-url ")
+                assert wheel.get("install", "pip install --extra-index-url ").startswith(
+                    "pip install --extra-index-url "
+                )
         if "last_with_wheel" in pkg:  # an older release for gap targets no newer one has a wheel for
             assert "suggest" in pkg and not set(pkg["last_with_wheel"]) & set(pkg["suggest"])
             assert set(pkg["last_with_wheel"]) <= set(pkg["rejected"])

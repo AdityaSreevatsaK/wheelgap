@@ -253,18 +253,17 @@
                     "additionalProperties": {"type": "string"}
                 },
                 "gap_wheel": {
-                    "description": "Present with --json --explain --fix. Unofficial published gap-wheel hints for exact releases and targets, keyed by target label. Missing or invalid metadata yields an empty mapping; it does not alter statuses or exit codes.",
+                    "description": "Present with --explain --fix: for each target in rejected that a wheel on wheelgap's gap wheel index fills (as for the top-level gap_wheels), that wheel. These wheels are unofficial: built by wheelgap from the PyPI sdist, not from the package's maintainers. Empty when none fills one, when the run uses --index-url or WHEELGAP_INDEX_URL, or when the gap wheel list couldn't be read. It doesn't change results, summary or the exit code.",
                     "type": "object",
                     "additionalProperties": {
                         "type": "object",
                         "additionalProperties": false,
-                        "required": ["wheel", "url", "sha256", "index", "install"],
+                        "required": ["wheel", "url", "sha256"],
                         "properties": {
-                            "wheel": {"type": "string"},
-                            "url": {"type": "string"},
-                            "sha256": {"type": "string"},
-                            "index": {"type": "string"},
-                            "install": {"type": "string"}
+                            "wheel": {"type": "string", "description": "The gap wheel's filename."},
+                            "url": {"type": "string", "description": "Where to download the wheel."},
+                            "sha256": {"type": "string", "description": "The wheel's SHA-256, as 64 lowercase hex digits."},
+                            "install": {"type": "string", "description": "The pip install command, only for inputs pip installs from as they are (a requirements file, a pyproject.toml, a pip report or package names); a lockfile's entries have none (see the text output's --fix section)."}
                         }
                     }
                 },

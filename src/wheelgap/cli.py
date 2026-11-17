@@ -296,8 +296,8 @@ def make_parser() -> argparse.ArgumentParser:
         "--fix",
         action="store_true",
         help="also say which gaps a wheel on wheelgap's gap wheel index fills, and how to install from it (reads "
-        "the index's list from wheelgap.github.io, which sends no package names; not with --offline, and off with "
-        "--index-url or a WHEELGAP_INDEX_URL mirror)",
+        "the index's list from wheelgap.github.io, which sends no package names, and keeps it in the 24-hour cache; "
+        "not with --offline, and off with --index-url or a WHEELGAP_INDEX_URL mirror)",
     )
     p.add_argument(
         "-q",
@@ -776,9 +776,13 @@ def render_explain(
     published_wheels: list[gapwheels.Fill] | None = None,
 ) -> list[str]:
     """`conda_forge`: --conda-forge hints, `build_info`: --build-info answers and `suggestions`: --suggest's, by id()
-    of the row's package. `notes` and `builds` (the tracker's build lab results): --notes, by id() of the row."""
+    of the row's package. `notes` and `builds` (the tracker's build lab results): --notes, by id() of the row.
+    `published_wheels`: --fix's fills (from the gap wheel list, which may come from the 24-hour cache), shown once per
+    release under its first filled target."""
     multi_py = len({t.python for t in targets}) > 1
-    matched_wheels = {(id(fill.row), fill.target): fill for fill in published_wheels or []}
+    filled: dict[int, list[gapwheels.Fill]] = {}
+    for fill in published_wheels or []:
+        filled.setdefault(id(fill.row), []).append(fill)
     out = []
     for r in rows:
         files = r.package.files or []
@@ -786,6 +790,7 @@ def render_explain(
         sources = source_targets(r, targets)
         needs = describe(info, sources) if info and sources else None
         ask = (issues_urls or {}).get(id(r.package))  # once per release, under its first gap
+        gap_wheel = filled.get(id(r))  # once per release, under its first filled target
         for t in gap_targets(r, targets):
             cell, color = CELL[r.results[t]]
             head = f"{r.package.name} {r.package.version or '?'} on {t.label(multi_py)}:"
@@ -813,12 +818,9 @@ def render_explain(
             if ask:
                 out.append(f"  ask for a wheel: {ask}")
                 ask = None
-            if matched_wheels.get((id(r), t)):
-                out.append(
-                    f"  gap wheel: an unofficial wheel is available from {gapwheels.ABOUT} "
-                    f"(pip install --extra-index-url {gapwheels.INDEX} "
-                    f"{r.package.name}=={r.package.version}); not from the package maintainers"
-                )
+            if gap_wheel and any(f.target == t for f in gap_wheel):
+                out += [f"  {line}" for line in gapwheels.explain_lines(gap_wheel, multi_py)]
+                gap_wheel = None
             out.append("")
         if conda_forge and (h := conda_forge.get(id(r.package))):
             out += [condaforge.hint_text(r.package, h, multi_py), ""]
@@ -976,16 +978,7 @@ def report_json(
             }
             if gap_wheels is not None:
                 out["gap_wheel"] = {
-                    f.target.label(multi_py): {
-                        "wheel": f.wheel.wheel,
-                        "url": f.wheel.url,
-                        "sha256": f.wheel.sha256,
-                        "index": gapwheels.INDEX,
-                        "install": f"pip install --extra-index-url {gapwheels.INDEX} "
-                        f"{r.package.name}=={r.package.version}",
-                    }
-                    for f in gap_wheels
-                    if f.row is r
+                    f.target.label(multi_py): gapwheels.explain_json(f) for f in gap_wheels if f.row is r
                 }
             if issues_urls is not None:
                 out["issues_url"] = issues_urls.get(id(r.package))

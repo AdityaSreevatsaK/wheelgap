@@ -384,14 +384,21 @@ def test_explain_fix_hints_are_per_target_and_preserve_exit_code(capsys, fake_py
     assert gap_wheels.calls == 0  # opt-in only
     code, output, _ = run(capsys, *NOWHEELS, "--explain", "--fix")
     assert code == base_code == 1
-    assert "gap wheel: an unofficial wheel is available" in output
-    assert f"pip install --extra-index-url {INDEX} nowheels==0.9" in output
-    assert "not from the package maintainers" in output
+    assert (
+        f"  gap wheel for win-arm64: {gapwheels.UNOFFICIAL}\n    pip install --extra-index-url {INDEX} nowheels==0.9\n"
+    ) in output
+    assert "not from the package's maintainers" in output
     code, data, _ = gap_wheels_json(capsys, *NOWHEELS, "--explain", "--fix")
     assert code == 1
     item = next(p for p in data["packages"] if p["name"] == "nowheels")
-    assert item["gap_wheel"]["win-arm64"]["index"] == INDEX
-    assert item["gap_wheel"]["win-arm64"]["wheel"] == FT_WHEEL
+    assert item["gap_wheel"] == {
+        "win-arm64": {
+            "wheel": FT_WHEEL,
+            "url": DOWNLOAD + FT_WHEEL,
+            "sha256": "ab" * 32,
+            "install": f"pip install --extra-index-url {INDEX} nowheels==0.9",
+        }
+    }
     assert gap_wheels.calls == 1  # second invocation uses the validated list cache
 
     _, plain_data, _ = gap_wheels_json(capsys, *NOWHEELS, "--explain")
@@ -428,3 +435,54 @@ def test_gap_wheel_cache_opt_out_and_validation(capsys, fake_pypi, gap_wheels):
     assert gap_wheels.calls == 1
     run(capsys, *NOWHEELS, "--fix", "--no-cache")
     assert gap_wheels.calls == 2
+
+
+def test_explain_fix_hint_once_per_release_naming_its_targets(capsys, fake_pypi, gap_wheels):
+    gap_wheels.add("nowheels", "0.9", FT_WHEEL)
+    gap_wheels.add("nowheels", "0.9", "nowheels-0.9-cp314-cp314t-win_amd64.whl")
+    _, out, _ = run(capsys, "nowheels==0.9", "-p", "3.14t", "-t", "win-arm64,win-amd64", "--explain", "--fix")
+    (line,) = [ln for ln in out.splitlines() if "gap wheel for" in ln]
+    assert "win-arm64" in line and "win-amd64" in line
+    assert out.count(f"pip install --extra-index-url {INDEX} nowheels==0.9") == 1
+
+
+def test_explain_fix_hint_for_a_uv_lock_points_to_the_fix_section(capsys, fake_pypi, fixtures, gap_wheels):
+    gap_wheels.add("puresdist", "1.0", "puresdist-1.0-cp314-cp314t-win_arm64.whl")
+    args = [str(fixtures / "uvproj" / "uv.lock"), "-p", "3.14t", "-t", "win-arm64", "--explain", "--fix"]
+    code, out, _ = run(capsys, *args)
+    assert code == 1
+    hint = f"  gap wheel for win-arm64: {gapwheels.UNOFFICIAL}\n    see the gap wheel section below for how to use it\n"
+    assert out.count(hint) == 1
+    assert out.index(hint) < out.index("To install them with uv, add this to pyproject.toml")
+    assert "--extra-index-url" not in out and "pip install" not in out  # pip would ignore an index for a uv.lock
+    _, data, _ = gap_wheels_json(capsys, *args)
+    item = next(p for p in data["packages"] if p["name"] == "puresdist")
+    assert item["gap_wheel"] == {
+        "win-arm64": {
+            "wheel": "puresdist-1.0-cp314-cp314t-win_arm64.whl",
+            "url": DOWNLOAD + "puresdist-1.0-cp314-cp314t-win_arm64.whl",
+            "sha256": "ab" * 32,
+        }
+    }
+
+
+def test_a_corrupt_cached_gap_wheel_list_is_fetched_again(capsys, fake_pypi, gap_wheels, lookup_cache):
+    gap_wheels.add("nowheels", "0.9", FT_WHEEL)
+    run(capsys, *NOWHEELS, "--fix")
+    assert gap_wheels.calls == 1
+    entries = list(lookup_cache.glob("*.json"))
+    assert entries
+    for entry in entries:  # the list's entry among them; a corrupt pinned lookup is only looked up again
+        entry.write_bytes(b"not json")
+    code, out, err = run(capsys, *NOWHEELS, "--fix")
+    assert gap_wheels.calls == 2
+    assert code == 1 and "  nowheels 0.9: win-arm64\n" in out and UNREADABLE not in err
+
+
+def test_no_cache_does_not_save_the_gap_wheel_list(capsys, fake_pypi, gap_wheels):
+    gap_wheels.add("nowheels", "0.9", FT_WHEEL)
+    run(capsys, *NOWHEELS, "--fix", "--no-cache")
+    run(capsys, *NOWHEELS, "--fix")
+    assert gap_wheels.calls == 2  # the --no-cache run saved nothing for this one to read
+    run(capsys, *NOWHEELS, "--fix")
+    assert gap_wheels.calls == 2  # but this one saved it

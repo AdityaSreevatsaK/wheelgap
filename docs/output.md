@@ -105,6 +105,9 @@ armlib 1.4.0 on musl-aarch64: ● source
   ask for a wheel: https://github.com/example/armlib/issues
 ```
 
+With [`--fix`](#fix) too, a package a wheel on wheelgap's gap wheel index fills gets a `gap wheel` line under its first
+filled target.
+
 ### Tracker notes {#notes}
 
 With `--notes` (or `notes = true` in `[tool.wheelgap]`), `--explain` also shows the
@@ -342,10 +345,29 @@ the index where the lockfile is made and lock again. Packages wheelgap can't pla
 on stderr names them. `--markdown` renders the same section with fenced code blocks, and `-q` keeps it. With nothing to fill, a
 note on stderr says so instead (not with `-q`).
 
+With `--explain` too (**after 0.13.0**), each package a gap wheel fills gets a `gap wheel` line under its first
+filled target in the `--explain` output, naming the targets it fills. The wheel is unofficial: built by wheelgap from
+the PyPI sdist, not from the package's maintainers. For an input pip installs from as it is, the line gives the pip
+command; for a lockfile it points to the section above, since the lockfile's own tool has to pick up the index:
+
+```text
+nowheels 0.9 on win-arm64: ● source
+  no wheels published for this version
+  gap wheel for win-arm64: unofficial, built by wheelgap from the PyPI sdist; not from the package's maintainers
+    pip install --extra-index-url https://wheelgap.github.io/wheels/simple/ nowheels==0.9
+```
+
+The gap wheel list is read once and kept in the 24-hour [cache](how-it-works.md#cache) (only a list with at least one
+usable entry), with or without `--explain`; `--no-cache` neither reads nor saves it.
+
 With `--json --fix`, the top-level `gap_wheels` list has one object per filled cell: `name`, `version`, `target` (the
 target label), `wheel` (its filename), `url` (where to download it) and `sha256`. It's `[]` when nothing fits, when
 the run uses another index, or when the list couldn't be read, and absent without `--fix`. Like the other hints, it
 never changes a status, the summary or the exit code.
+
+With `--json --explain --fix`, each package also gets `gap_wheel`: an object keyed by target label (only the targets a
+gap wheel fills, so `{}` when none does) whose values have `wheel`, `url` and `sha256`, and `install` (the pip command)
+for inputs pip installs from as they are; a lockfile's entries have no `install`.
 
 ## --json {#json}
 

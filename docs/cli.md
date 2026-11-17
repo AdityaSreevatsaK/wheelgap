@@ -16,12 +16,6 @@ can be repeated; `-p`, `-t`, `--ignore` and `--advisory` also take comma-separat
 `wheelgap --help` lists the flags of the version you run. This page describes `main`; flags marked **after 0.13.0**
 aren't in a release yet.
 
-## Published gap-wheel hints (after 0.13.0)
-
-`--explain --fix` adds a per-target hint where wheelgap's independently published gap-wheel index has an unofficial wheel for the exact package, release and accepted Python/platform wheel tags, with a `pip install --extra-index-url https://wheelgap.github.io/wheels/simple/ PACKAGE==VERSION` command. `--json --explain --fix` adds `gap_wheel` on each package, keyed by target label, beside the existing `--fix` report-wide `gap_wheels` list.
-
-This is **opt-in**: it reads the bounded wheel list from wheelgap.github.io only with `--fix`, never with `--offline` or another configured index. A validated list is cached for 24 hours; `--no-cache` bypasses it. A missing/malformed list yields no hint rather than a crash. PyPI coverage statuses and exit codes are unchanged.
-
 ## Targets
 
 ### `-p`, `--python` {#python}
@@ -241,7 +235,8 @@ Show every package in the table, not just the ones with gaps.
 
 For each gap, list the wheels that were rejected and why, closest misses first, and the dependency path that installs
 the package where the input has one. With `--json`, adds `rejected` and `via` to each package. Text output can't
-combine it with quiet mode. See [Output](output.md#explain).
+combine it with quiet mode. See [Output](output.md#explain). With [`--fix`](#fix) (**after 0.13.0**), a gap that a
+gap wheel fills also gets a `gap wheel` line.
 
 A wheel that would fit but whose release was yanked is named with the reason `yanked`.
 
@@ -350,11 +345,20 @@ fills, and how to install from it: a `[tool.uv.index]` and `[tool.uv.sources]` s
 uv.lock input, and an `--extra-index-url` line for pip otherwise. A cell counts only when it's `source` or `missing`
 (and not `--ignore`d), the package passes [the PyPI-origin rule](how-it-works.md#pypi-origin), and the index has a
 wheel of exactly that version whose tags the target accepts. It reads the index's list from wheelgap.github.io in one
-request that names no package, and only when a gap could use it. It never changes a status, the summary or the exit
-code: wheelgap still reports what PyPI has. `--offline` refuses the flag; with `--index-url`, `index-url` in
-`[tool.wheelgap]` or a `WHEELGAP_INDEX_URL` mirror it's off and reads nothing. If the list can't be read, a note on
-stderr says so. With `--json` it adds [`gap_wheels`](output.md#fix). There's no config key for it.
+request that names no package, and only when a gap could use it. A list it could read is kept in the 24-hour
+[cache](how-it-works.md#cache) (`--no-cache` neither reads nor saves it, and `--online` reads it again). It never
+changes a status, the summary or the exit code: wheelgap still reports what PyPI has. `--offline` refuses the flag
+with an error; with `--index-url`, `index-url` in `[tool.wheelgap]` or a `WHEELGAP_INDEX_URL` mirror it's off and
+reads nothing. If the list can't be read, a note on stderr says so. With `--json` it adds
+[`gap_wheels`](output.md#fix). There's no config key for it.
 See [Installing from the gap wheel index](recipes.md#installing-from-the-gap-wheel-index).
+
+With `--explain` too (**after 0.13.0**), each package a gap wheel fills gets a `gap wheel` line under its first filled
+target, naming the targets it fills and saying the wheel is unofficial: built by wheelgap from the PyPI sdist, not from
+the package's maintainers. For inputs pip installs from as they are (a requirements file, a `pyproject.toml`, a pip
+report or package names) it gives the `pip install --extra-index-url` command; for a lockfile it points to the
+`--fix` section, since that lockfile's own tool has to pick the index up. With `--json`, each package gets
+[`gap_wheel`](output.md#fix).
 
 ### `-q`, `--quiet`, `--no-quiet` {#quiet}
 
