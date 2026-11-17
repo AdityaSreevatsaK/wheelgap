@@ -9,7 +9,7 @@ import pytest
 from test_deps import index  # noqa: F401  (the fake PyPI --deps resolves against)
 
 import wheelgap
-from wheelgap import cli
+from wheelgap import cli, gapwheels
 from wheelgap.check import Status
 from wheelgap.cli import main
 from wheelgap.targets import ALIASES, DEFAULT_PLATFORMS, PLATFORMS
