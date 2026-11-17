@@ -799,10 +799,14 @@ def test_deps_json_explain_direct_extra_only_names_the_requester(index, capsys):
 def test_diff_deps_detects_a_new_transitive_gap_on_upgrade(index, monkeypatch, capsys):
     from wheelgap.diff import main as diff_main
 
-    monkeypatch.setitem(INDEX, "upgrade", {
-        "1.0": release(),
-        "2.0": release(["crypt>=1"]),
-    })
+    monkeypatch.setitem(
+        INDEX,
+        "upgrade",
+        {
+            "1.0": release(),
+            "2.0": release(["crypt>=1"]),
+        },
+    )
     args = ["upgrade==1.0", "upgrade==2.0", "--deps", "-p", "3.14", "-t", "win-arm64"]
     assert diff_main([*args, "--json"]) == 1
     report = json.loads(capsys.readouterr().out)
@@ -824,7 +828,10 @@ def test_diff_deps_rejects_unpinned_and_non_index_inputs_before_lookup(index, ca
     from wheelgap.diff import main as diff_main
 
     unsupported = [
-        "app", "app>=1", "app==1.*", "app @ https://example.com/app.whl",
+        "app",
+        "app>=1",
+        "app==1.*",
+        "app @ https://example.com/app.whl",
         "app==1.0; python_version < '3.15'",
     ]
     for invalid in unsupported:
