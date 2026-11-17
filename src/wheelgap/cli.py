@@ -813,7 +813,7 @@ def render_explain(
             if ask:
                 out.append(f"  ask for a wheel: {ask}")
                 ask = None
-            if published := matched_wheels.get((id(r), t)):
+            if matched_wheels.get((id(r), t)):
                 out.append(
                     f"  gap wheel: an unofficial wheel is available from {gapwheels.ABOUT} "
                     f"(pip install --extra-index-url {gapwheels.INDEX} "
