@@ -376,3 +376,52 @@ def test_no_binary_package_isnt_blamed_on_its_origin(capsys, fake_pypi, gap_whee
 
 def test_lock_advice_carries_the_private_index_caveat():
     assert gapwheels.LOCK_CAVEAT in gapwheels.text_lines([_fill("poetry", "poetry.lock")], False)
+
+
+def test_explain_fix_hints_are_per_target_and_preserve_exit_code(capsys, fake_pypi, gap_wheels):
+    gap_wheels.add("nowheels", "0.9", FT_WHEEL)
+    base_code, base_out, _ = run(capsys, *NOWHEELS, "--explain")
+    assert gap_wheels.calls == 0  # opt-in only
+    code, output, _ = run(capsys, *NOWHEELS, "--explain", "--fix")
+    assert code == base_code == 1
+    assert "gap wheel: an unofficial wheel is available" in output
+    assert f"pip install --extra-index-url {INDEX} nowheels==0.9" in output
+    assert "not from the package maintainers" in output
+    code, data, _ = gap_wheels_json(capsys, *NOWHEELS, "--explain", "--fix")
+    assert code == 1
+    item = next(p for p in data["packages"] if p["name"] == "nowheels")
+    assert item["gap_wheel"]["win-arm64"]["index"] == INDEX
+    assert item["gap_wheel"]["win-arm64"]["wheel"] == FT_WHEEL
+    assert gap_wheels.calls == 1  # second invocation uses the validated list cache
+
+    _, plain_data, _ = gap_wheels_json(capsys, *NOWHEELS, "--explain")
+    assert "gap_wheel" not in next(p for p in plain_data["packages"] if p["name"] == "nowheels")
+
+
+@pytest.mark.parametrize("name,version,wheel", [
+    ("nowheels", "9.9", FT_WHEEL),
+    ("other", "0.9", "other-0.9-cp314-cp314t-win_arm64.whl"),
+    ("nowheels", "0.9", "nowheels-0.9-cp313-cp313-win_arm64.whl"),
+])
+def test_explain_fix_never_suggests_wrong_wheels(capsys, fake_pypi, gap_wheels, name, version, wheel):
+    gap_wheels.add(name, version, wheel)
+    _, data, _ = gap_wheels_json(capsys, *NOWHEELS, "--explain", "--fix")
+    row = next(p for p in data["packages"] if p["name"] == "nowheels")
+    assert row.get("gap_wheel") == {}
+
+
+def test_explain_fix_unreadable_index_does_not_crash_or_guess(capsys, fake_pypi, gap_wheels):
+    gap_wheels.doc = {"schema": 1, "wheels": "malformed"}
+    code, data, err = gap_wheels_json(capsys, *NOWHEELS, "--explain", "--fix")
+    assert code == 1
+    assert data["packages"][0].get("gap_wheel") == {}
+    assert "couldn't read the gap wheel list" in err
+
+
+def test_gap_wheel_cache_opt_out_and_validation(capsys, fake_pypi, gap_wheels):
+    gap_wheels.add("nowheels", "0.9", FT_WHEEL)
+    run(capsys, *NOWHEELS, "--fix")
+    run(capsys, *NOWHEELS, "--fix")
+    assert gap_wheels.calls == 1
+    run(capsys, *NOWHEELS, "--fix", "--no-cache")
+    assert gap_wheels.calls == 2
