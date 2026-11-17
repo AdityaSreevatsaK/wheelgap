@@ -398,11 +398,14 @@ def test_explain_fix_hints_are_per_target_and_preserve_exit_code(capsys, fake_py
     assert "gap_wheel" not in next(p for p in plain_data["packages"] if p["name"] == "nowheels")
 
 
-@pytest.mark.parametrize("name,version,wheel", [
-    ("nowheels", "9.9", FT_WHEEL),
-    ("other", "0.9", "other-0.9-cp314-cp314t-win_arm64.whl"),
-    ("nowheels", "0.9", "nowheels-0.9-cp313-cp313-win_arm64.whl"),
-])
+@pytest.mark.parametrize(
+    "name,version,wheel",
+    [
+        ("nowheels", "9.9", FT_WHEEL),
+        ("other", "0.9", "other-0.9-cp314-cp314t-win_arm64.whl"),
+        ("nowheels", "0.9", "nowheels-0.9-cp313-cp313-win_arm64.whl"),
+    ],
+)
 def test_explain_fix_never_suggests_wrong_wheels(capsys, fake_pypi, gap_wheels, name, version, wheel):
     gap_wheels.add(name, version, wheel)
     _, data, _ = gap_wheels_json(capsys, *NOWHEELS, "--explain", "--fix")
