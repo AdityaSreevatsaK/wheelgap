@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `--fix --print-gap-wheel-snippet` prints just the manual-review index configuration for exact matching gap wheels, without changing project files. Supports pip requirements and uv.lock with an explicit uv index; refuses ambiguous input types and keeps existing check status/exit codes. (#467, thanks [@AdityaSreevatsaK](https://github.com/AdityaSreevatsaK))
+
 - `--explain --fix` adds a `gap wheel` line under a package that a wheel on the gap wheel index fills: unofficial, built by wheelgap from the PyPI sdist; not from the package's maintainers. It gives the `pip install` command for inputs pip installs from as they are, and points to the `--fix` section for lockfiles. `--json --explain --fix` adds a `gap_wheel` object per package. The validated list is now cached for 24 hours, with plain `--fix` too (`--no-cache` skips it). It never changes results or exit codes. (#477, thanks [@AdityaSreevatsaK](https://github.com/AdityaSreevatsaK))
 - Python API: `check_lockfile(..., deps=True)` raises `SourceError` naming any requirement that isn't an index package (`-e .`, a path, a URL), since what it installs isn't checked; pass `allow_skipped=True` to check the rest, as 0.13.0 did. A requirements file compiled with hashes is still checked as written. (#476, thanks [@dianatofficial](https://github.com/dianatofficial))
 - With `--extra` or `--all-extras` on a poetry.lock, a package that a selected extra already installs no longer gets the "kept for every extra" note when another of its groups has a platform marker. (#475, thanks [@patrickballard](https://github.com/patrickballard))
