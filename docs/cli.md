@@ -285,6 +285,14 @@ Python can match, and it never changes a status, the summary or the exit code. O
 to anaconda.org; a run with `--index-url` or `WHEELGAP_INDEX_URL` looks nothing up, and `--offline` refuses the flag.
 See [conda-forge hint](output.md#conda-forge) and [the PyPI-origin rule](how-it-works.md#pypi-origin).
 
+### `--piwheels` {#piwheels}
+
+With `--explain`, also say when [piwheels](https://www.piwheels.org/) has a wheel of the same version for a
+`linux-armv7l` gap (32-bit Raspberry Pi OS). piwheels has no aarch64 wheels, so other targets are never looked up. It
+never changes a status, the summary or the exit code. Only names known to be on PyPI are sent to piwheels.org; a run with `--index-url`
+or `WHEELGAP_INDEX_URL` looks nothing up, and `--offline` refuses the flag.
+See [piwheels hint](output.md#piwheels) and [the PyPI-origin rule](how-it-works.md#pypi-origin).
+
 ### `--notes`, `--no-notes` {#notes}
 
 With `--explain`, also show the [coverage tracker](https://wheelgap.github.io/tracker/)'s notes for a
