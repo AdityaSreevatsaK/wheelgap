@@ -511,7 +511,7 @@ def test_print_only_uv_snippet_is_valid_toml_and_preserves_project(capsys, fixtu
     gap_wheels.add("nativeext", "0.3", "nativeext-0.3-cp314-cp314t-win_arm64.whl")
     root = fixtures / "uvproj"
     original_lock = (root / "uv.lock").read_bytes()
-    original_project = (root / "pyproject.toml").read_bytes()
+    assert not (root / "pyproject.toml").exists()
     code, stdout, _ = run(
         capsys, str(root / "uv.lock"), "-p", "3.14t", "-t", "win-arm64", "--fix", "--print-gap-wheel-snippet"
     )
@@ -524,7 +524,7 @@ def test_print_only_uv_snippet_is_valid_toml_and_preserves_project(capsys, fixtu
     assert "Run uv lock" in stdout
     assert "--extra-index-url" not in stdout
     assert (root / "uv.lock").read_bytes() == original_lock
-    assert (root / "pyproject.toml").read_bytes() == original_project
+    assert not (root / "pyproject.toml").exists()
 
 
 def test_print_only_empty_for_unmatched_wheel(capsys, fake_pypi, gap_wheels):
