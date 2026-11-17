@@ -312,6 +312,37 @@ LOCK_CAVEAT = (
 UV_MERGE = "If pyproject.toml already has a [tool.uv.sources] table, add these lines to it instead of a second one."
 
 
+def project_snippet_lines(fills: list[Fill]) -> list[str] | None:
+    """Print-only first step for #467: copyable configuration, never a file mutation.
+
+    An empty list means no exact wheel matched. None means the input type (or mixed
+    input types) has no unambiguous, safe snippet; --fix still explains those inputs.
+    The CLI prints these lines alone, so users can review or redirect them themselves.
+    """
+    if not fills:
+        return []
+    kinds = {f.source.kind for f in fills}
+    if kinds == {"uv"}:
+        _, config, notes, _ = _parts(fills, False)
+        return [
+            "# pyproject.toml (uv): review and merge these entries with existing tables; do not duplicate tables.",
+            *config,
+            *(f"# {note}." for note in notes),
+            "# After reviewing, run uv lock to regenerate uv.lock.",
+        ]
+    if kinds.issubset({"requirements", None}):
+        return [
+            "# requirements.txt (pip): review index trust before copying; no file has been changed.",
+            "# pip searches extra indexes alongside PyPI: do not use where private names could collide.",
+            f"--extra-index-url {INDEX}",
+            *(
+                f"# For --require-hashes, add --hash=sha256:{sha} to the existing {req} line."
+                for req, sha in _hashes(fills)
+            ),
+        ]
+    return None  # Other lockfiles, pyproject-only, pip reports or mixed inputs: don't guess.
+
+
 def text_lines(fills: list[Fill], multi_py: bool) -> list[str]:
     """--fix's section of the text output (empty when nothing is fillable)."""
     if not fills:
