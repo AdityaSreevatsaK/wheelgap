@@ -423,7 +423,9 @@ def _main(argv: list[str] | None, prog: str) -> int:
                 )
             for spec in (args.old, args.new):
                 if Path(spec).exists():
-                    raise SourceError("--deps takes two pinned package specs, not local files; omit --deps for lockfiles")
+                    raise SourceError(
+                        "--deps takes two pinned package specs, not local files; omit --deps for lockfiles"
+                    )
                 name, version = _pinned_spec(spec)
                 sides.append(merge(check_packages([(name, version)], targets, deps=True), targets))
                 sources.append(Source("api", pypi_only=True))
