@@ -88,6 +88,16 @@ def cell(side: dict, prefix: str = "") -> str:
     return code(status)
 
 
+def name_cell(pkg: dict, target: str) -> str:
+    """The package's name, with the direct dependency that brings it in on this target, as `wheelgap diff` words it."""
+    name = code(pkg.get("name"))
+    direct = pkg.get("direct")
+    via = direct.get(target) if isinstance(direct, dict) else None
+    if isinstance(via, list) and via and all(isinstance(v, str) for v in via):
+        name += f" (via {code(via[0])}{f' +{len(via) - 1}' if len(via) > 1 else ''})"
+    return name
+
+
 def rows(data: dict, *, suggestions: bool = False) -> list[str]:
     """One table row per package and target that got worse, then the new packages' gaps."""
     out = []
@@ -96,7 +106,7 @@ def rows(data: dict, *, suggestions: bool = False) -> list[str]:
         version = new if old == new else f"{old} → {new}"
         for target, side in pkg["targets"].items():
             out.append(
-                f"<tr><td>{code(pkg.get('name'))}</td><td>{version}</td><td>{code(target)}</td>"
+                f"<tr><td>{name_cell(pkg, target)}</td><td>{version}</td><td>{code(target)}</td>"
                 f"<td>{cell(side, 'old_')} → {cell(side, 'new_')}</td></tr>"
             )
         lines = pkg.get("suggestions") if suggestions else None
@@ -108,7 +118,7 @@ def rows(data: dict, *, suggestions: bool = False) -> list[str]:
         version = f"(new) {versions(pkg.get('versions', []))}"
         for target, side in pkg["targets"].items():
             out.append(
-                f"<tr><td>{code(pkg.get('name'))}</td><td>{version}</td><td>{code(target)}</td>"
+                f"<tr><td>{name_cell(pkg, target)}</td><td>{version}</td><td>{code(target)}</td>"
                 f"<td>(new) → {cell(side)}</td></tr>"
             )
     return out

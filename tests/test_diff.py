@@ -665,6 +665,17 @@ def test_diff_reports_origins_only_for_worsened_targets():
     assert "win-amd64" not in report.worse[0]["direct"]
 
 
+def test_diff_hint_keeps_the_lockfile_spelling_and_counts_other_parents():
+    (target,) = make_targets("3.13", "linux-x86_64")
+    now = merge(
+        [Result("NoWheels", "0.9", {target: Status.SOURCE}, direct={target: ("Parent_A", "parent-b")})],
+        [target],
+    )
+    report = compare({}, now, [target])
+    assert report.lines[0] == "NoWheels (via Parent_A +1) 0.9 (new)"
+    assert report.new[0]["direct"] == {"linux-x86_64": ["Parent_A", "parent-b"]}
+
+
 def test_diff_direct_package_does_not_invent_provenance():
     (target,) = make_targets("3.13", "linux-x86_64")
     report = compare(

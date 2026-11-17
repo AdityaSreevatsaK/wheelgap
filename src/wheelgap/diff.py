@@ -69,7 +69,7 @@ class Package:
     versions: list[str]
     statuses: dict[Target, Status]
     skips: dict[Target, str] = field(default_factory=dict)
-    # Direct requirements responsible for each target's gap on the new side.
+    # Per target, the direct dependencies that bring the package in (from the entries with the winning status).
     direct: dict[Target, tuple[str, ...]] = field(default_factory=dict)
 
     @property
@@ -172,16 +172,19 @@ def _side(pkg: Package, t: Target, prefix: str = "") -> dict[str, str]:
 
 
 def _direct(pkg: Package, targets: list[Target], multi_py: bool) -> dict[str, list[str]]:
-    """The new side's direct requirements, per changed target (omit direct packages)."""
+    """The direct dependencies that bring the package in, per changed target (empty for a direct dependency)."""
     return {t.label(multi_py): list(pkg.direct[t]) for t in targets if pkg.direct.get(t)}
 
 
 def _with_direct(pkg: Package, targets: list[Target]) -> str:
-    """Add the same concise provenance hint as the normal package table."""
-    roots = dict.fromkeys(canonicalize_name(name) for t in targets for name in pkg.direct.get(t, ()))
+    """The name with the same `(via parent +N)` hint as the main command's table, spelled as the lockfile has it."""
+    roots: dict[str, str] = {}
+    for t in targets:
+        for name in pkg.direct.get(t, ()):
+            roots.setdefault(canonicalize_name(name), name)
     if not roots:
         return pkg.name
-    first = next(iter(roots))
+    first = next(iter(roots.values()))
     extra = f" +{len(roots) - 1}" if len(roots) > 1 else ""
     return f"{pkg.name} (via {first}{extra})"
 
@@ -197,14 +200,14 @@ def compare(before: dict[str, Package], after: dict[str, Package], targets: list
             if gaps:
                 report.lines.append(f"{_with_direct(pkg, gaps)} {pkg.version} (new)")
                 report.lines += [f"  {t.label(multi_py)}: {pkg.cell(t)}" for t in gaps]
-                report.new.append(
-                    {
-                        "name": pkg.name,
-                        "versions": pkg.versions,
-                        "targets": {t.label(multi_py): _side(pkg, t) for t in gaps},
-                        **({"direct": _direct(pkg, gaps, multi_py)} if _direct(pkg, gaps, multi_py) else {}),
-                    }
-                )
+                added: dict = {
+                    "name": pkg.name,
+                    "versions": pkg.versions,
+                    "targets": {t.label(multi_py): _side(pkg, t) for t in gaps},
+                }
+                if direct := _direct(pkg, gaps, multi_py):
+                    added["direct"] = direct
+                report.new.append(added)
             continue
         was = before[key]
         changed = [t for t in targets if worse_on(was, pkg, t)]
@@ -217,15 +220,15 @@ def compare(before: dict[str, Package], after: dict[str, Package], targets: list
             version = pkg.version if pkg.version == was.version else f"{was.version} → {pkg.version}"
             report.lines.append(f"{_with_direct(pkg, changed)} {version}")
             report.lines += [f"  {t.label(multi_py)}: {was.cell(t)} → {pkg.cell(t)}" for t in changed]
-            report.worse.append(
-                {
-                    "name": pkg.name,
-                    "old_versions": was.versions,
-                    "new_versions": pkg.versions,
-                    "targets": {t.label(multi_py): _side(was, t, "old_") | _side(pkg, t, "new_") for t in changed},
-                    **({"direct": _direct(pkg, changed, multi_py)} if _direct(pkg, changed, multi_py) else {}),
-                }
-            )
+            worsened: dict = {
+                "name": pkg.name,
+                "old_versions": was.versions,
+                "new_versions": pkg.versions,
+                "targets": {t.label(multi_py): _side(was, t, "old_") | _side(pkg, t, "new_") for t in changed},
+            }
+            if direct := _direct(pkg, changed, multi_py):
+                worsened["direct"] = direct
+            report.worse.append(worsened)
     return report
 
 
