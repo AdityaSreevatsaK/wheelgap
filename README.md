@@ -202,6 +202,7 @@ Contributing to wheelgap with an agent? See [AGENTS.md](https://github.com/wheel
 ```bash
 wheelgap diff old/uv.lock uv.lock -p 3.13 -t linux-aarch64,musl-aarch64
 wheelgap diff origin/main:uv.lock uv.lock -p 3.13 -t linux-aarch64   # the base branch's lockfile, no checkout needed
+wheelgap diff mcp==2.2.0 mcp==2.3.0 --deps -t win-arm64   # compare full resolved PyPI trees
 ```
 
 This checks both lockfiles and lists the packages that got worse on a target (a wheel that became a source build, say) and the new packages with gaps, so a dependency bump that drops a platform fails CI. It exits 1 if there are any, 0 if not, and 2 on bad input. See [`wheelgap diff`](https://wheelgap.github.io/wheelgap/diff/).
