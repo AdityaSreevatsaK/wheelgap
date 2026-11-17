@@ -773,10 +773,12 @@ def render_explain(
     suggestions: Suggestions | None = None,
     builds: RowBuilds | None = None,
     issues_urls: dict[int, str | None] | None = None,
+    published_wheels: list[gapwheels.Fill] | None = None,
 ) -> list[str]:
     """`conda_forge`: --conda-forge hints, `build_info`: --build-info answers and `suggestions`: --suggest's, by id()
     of the row's package. `notes` and `builds` (the tracker's build lab results): --notes, by id() of the row."""
     multi_py = len({t.python for t in targets}) > 1
+    matched_wheels = {(id(fill.row), fill.target): fill for fill in published_wheels or []}
     out = []
     for r in rows:
         files = r.package.files or []
@@ -811,6 +813,12 @@ def render_explain(
             if ask:
                 out.append(f"  ask for a wheel: {ask}")
                 ask = None
+            if published := matched_wheels.get((id(r), t)):
+                out.append(
+                    f"  gap wheel: an unofficial wheel is available from {gapwheels.ABOUT} "
+                    f"(pip install --extra-index-url {gapwheels.INDEX} "
+                    f"{r.package.name}=={r.package.version}); not from the package maintainers"
+                )
             out.append("")
         if conda_forge and (h := conda_forge.get(id(r.package))):
             out += [condaforge.hint_text(r.package, h, multi_py), ""]
@@ -966,6 +974,18 @@ def report_json(
                 for t in gap_targets(r, targets)
                 if r.direct_via.get(t)
             }
+            if gap_wheels is not None:
+                out["gap_wheel"] = {
+                    f.target.label(multi_py): {
+                        "wheel": f.wheel.wheel,
+                        "url": f.wheel.url,
+                        "sha256": f.wheel.sha256,
+                        "index": gapwheels.INDEX,
+                        "install": f"pip install --extra-index-url {gapwheels.INDEX} "
+                        f"{r.package.name}=={r.package.version}",
+                    }
+                    for f in gap_wheels if f.row is r
+                }
             if issues_urls is not None:
                 out["issues_url"] = issues_urls.get(id(r.package))
             if conda_forge and (h := conda_forge.get(id(r.package))):
@@ -1531,6 +1551,9 @@ def gap_wheel_fills(
     index_url: str | None,
     index_how: str,
     quiet: bool,
+    *,
+    read_cache: bool = True,
+    write_cache: bool = True,
 ) -> list[gapwheels.Fill]:
     """--fix: the gap cells a wheel on wheelgap's gap wheel index fills. The list is read in one request that names no
     package, only when a gap of a package that is positively PyPI's could use it (gapwheels.eligible), and never when
@@ -1565,7 +1588,7 @@ def gap_wheel_fills(
         )
     fills: list[gapwheels.Fill] = []
     if wanted:
-        wheels = gapwheels.look_up()
+        wheels = gapwheels.look_up(read_cache=read_cache, write_cache=write_cache)
         if wheels is None:
             # Even with -q: without it, a run that couldn't look would read as "no gap wheel fits".
             print("wheelgap: note: couldn't read the gap wheel list, so --fix has no suggestions", file=sys.stderr)
@@ -2249,7 +2272,13 @@ def _main(argv: list[str], project: Path | None = None) -> int:
             print(Style(use_color(args.color)).dim(f"wheelgap: note: {stopped}"), file=sys.stderr)
 
     # None: not asked for. Like --suggest, it never changes a status or the exit code.
-    fills = gap_wheel_fills(gaps, targets, sources, index_url, index_how, quiet) if args.fix else None
+    fills = (
+        gap_wheel_fills(
+            gaps, targets, sources, index_url, index_how, quiet,
+            read_cache=not (args.no_cache or args.online), write_cache=not args.no_cache,
+        )
+        if args.fix else None
+    )
 
     issues_urls = explain_issues_urls(rows, sources, index_url) if args.explain else None
 
@@ -2403,6 +2432,7 @@ def _main(argv: list[str], project: Path | None = None) -> int:
                 suggestions,
                 row_builds,
                 issues_urls=issues_urls,
+                published_wheels=fills,
             ):
                 print(ln)
 
