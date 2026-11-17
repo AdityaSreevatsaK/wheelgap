@@ -2153,7 +2153,7 @@ JSON_TYPES = {"object": dict, "array": list, "string": str, "integer": int, "boo
 
 def _check_schema(value, schema, root, where="$"):
     """Validate `value` against the JSON Schema keywords the output schema uses, and no others."""
-    known = {"$ref", "type", "enum", "minimum", "required", "properties", "additionalProperties", "items"}
+    known = {"$ref", "type", "enum", "minimum", "required", "properties", "additionalProperties", "items", "minItems"}
     annotations = {"$schema", "$id", "$defs", "title", "description"}
     assert set(schema) <= known | annotations, f"{where}: the test doesn't check {set(schema) - known - annotations}"
     if "$ref" in schema:
@@ -2171,6 +2171,8 @@ def _check_schema(value, schema, root, where="$"):
         assert value in schema["enum"], (where, value)
     if "minimum" in schema:
         assert value >= schema["minimum"], (where, value)
+    if "minItems" in schema and isinstance(value, list):
+        assert len(value) >= schema["minItems"], (where, value)
     if isinstance(value, dict):
         properties = schema.get("properties", {})
         assert set(schema.get("required", [])) <= set(value), (where, sorted(value))
