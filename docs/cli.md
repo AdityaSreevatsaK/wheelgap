@@ -16,6 +16,12 @@ can be repeated; `-p`, `-t`, `--ignore` and `--advisory` also take comma-separat
 `wheelgap --help` lists the flags of the version you run. This page describes `main`; flags marked **after 0.13.0**
 aren't in a release yet.
 
+## Published gap-wheel hints (after 0.13.0)
+
+`--explain --fix` adds a per-target hint where wheelgap's independently published gap-wheel index has an unofficial wheel for the exact package, release and accepted Python/platform wheel tags, with a `pip install --extra-index-url https://wheelgap.github.io/wheels/simple/ PACKAGE==VERSION` command. `--json --explain --fix` adds `gap_wheel` on each package, keyed by target label, beside the existing `--fix` report-wide `gap_wheels` list.
+
+This is **opt-in**: it reads the bounded wheel list from wheelgap.github.io only with `--fix`, never with `--offline` or another configured index. A validated list is cached for 24 hours; `--no-cache` bypasses it. A missing/malformed list yields no hint rather than a crash. PyPI coverage statuses and exit codes are unchanged.
+
 ## Targets
 
 ### `-p`, `--python` {#python}
