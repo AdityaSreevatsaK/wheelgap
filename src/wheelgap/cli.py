@@ -984,7 +984,8 @@ def report_json(
                         "install": f"pip install --extra-index-url {gapwheels.INDEX} "
                         f"{r.package.name}=={r.package.version}",
                     }
-                    for f in gap_wheels if f.row is r
+                    for f in gap_wheels
+                    if f.row is r
                 }
             if issues_urls is not None:
                 out["issues_url"] = issues_urls.get(id(r.package))
@@ -2274,10 +2275,17 @@ def _main(argv: list[str], project: Path | None = None) -> int:
     # None: not asked for. Like --suggest, it never changes a status or the exit code.
     fills = (
         gap_wheel_fills(
-            gaps, targets, sources, index_url, index_how, quiet,
-            read_cache=not (args.no_cache or args.online), write_cache=not args.no_cache,
+            gaps,
+            targets,
+            sources,
+            index_url,
+            index_how,
+            quiet,
+            read_cache=not (args.no_cache or args.online),
+            write_cache=not args.no_cache,
         )
-        if args.fix else None
+        if args.fix
+        else None
     )
 
     issues_urls = explain_issues_urls(rows, sources, index_url) if args.explain else None
