@@ -676,13 +676,13 @@ def test_diff_direct_package_does_not_invent_provenance():
 def test_diff_uv_lock_new_transitive_gap_names_its_direct_owner(fake_pypi, tmp_path, capsys):
     old = uv_lock(['{ name = "purewheel" }']) + UV_PUREWHEEL
     newly_depends = UV_PUREWHEEL.replace(
-        "wheels = [", 'dependencies = [{ name = "NoWheels" }]\\nwheels = [', 1
+        "wheels = [", 'dependencies = [{ name = "NoWheels" }]\nwheels = [', 1
     )
     no_wheels = (
-        '[[package]]\\nname = "NoWheels"\\nversion = "0.9"\\n'
-        'source = { registry = "https://pypi.org/simple" }\\n'
+        '[[package]]\nname = "NoWheels"\nversion = "0.9"\n'
+        'source = { registry = "https://pypi.org/simple" }\n'
         'sdist = { url = "https://files.pythonhosted.org/packages/nowheels-0.9.tar.gz", '
-        'hash = "sha256:00", size = 1 }\\n'
+        'hash = "sha256:00", size = 1 }\n'
     )
     new = uv_lock(['{ name = "purewheel" }']) + newly_depends + no_wheels
     old_dir, new_dir = tmp_path / "old", tmp_path / "new"
