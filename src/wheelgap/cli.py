@@ -301,6 +301,12 @@ def make_parser() -> argparse.ArgumentParser:
         "not with --offline, and off with --index-url or a WHEELGAP_INDEX_URL mirror)",
     )
     p.add_argument(
+        "--print-gap-wheel-snippet",
+        action="store_true",
+        help="with --fix, print only a copyable, reviewed config snippet for pip requirements or uv.lock; "
+        "never writes any files (other input types are refused)",
+    )
+    p.add_argument(
         "-q",
         "--quiet",
         action=argparse.BooleanOptionalAction,
@@ -1625,6 +1631,10 @@ def _main(argv: list[str], project: Path | None = None) -> int:
     args = parser.parse_args(argv)
     if args.json and args.markdown:
         parser.error("--json and --markdown can't be used together")
+    if args.print_gap_wheel_snippet and not args.fix:
+        parser.error("--print-gap-wheel-snippet needs --fix")
+    if args.print_gap_wheel_snippet and (args.json or args.markdown):
+        parser.error("--print-gap-wheel-snippet only prints a plain snippet; omit --json and --markdown")
     if args.list_targets and args.markdown:
         parser.error("--list-targets has no Markdown form (use --json)")
     if args.offline and args.online:
@@ -2268,6 +2278,19 @@ def _main(argv: list[str], project: Path | None = None) -> int:
         if args.fix
         else None
     )
+
+    if args.print_gap_wheel_snippet:
+        snippet = gapwheels.project_snippet_lines(fills or [])
+        if snippet is None:
+            print(
+                "wheelgap: error: no safe single snippet for these input types; "
+                "use --fix without --print-gap-wheel-snippet to review the advice",
+                file=sys.stderr,
+            )
+            return 2
+        if snippet:
+            print("\n".join(snippet))
+        return code
 
     issues_urls = explain_issues_urls(rows, sources, index_url) if args.explain else None
 
