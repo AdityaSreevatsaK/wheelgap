@@ -648,11 +648,14 @@ def test_diff_reports_origins_only_for_worsened_targets():
     linux, windows = targets
     was = merge([Result("transitive", "1.0", {linux: Status.WHEEL, windows: Status.WHEEL})], targets)
     now = merge(
-        [Result(
-            "transitive", "1.1",
-            {linux: Status.SOURCE, windows: Status.WHEEL},
-            direct={linux: ("parent",), windows: ("another-parent",)},
-        )],
+        [
+            Result(
+                "transitive",
+                "1.1",
+                {linux: Status.SOURCE, windows: Status.WHEEL},
+                direct={linux: ("parent",), windows: ("another-parent",)},
+            )
+        ],
         targets,
     )
     report = compare(was, now, targets)
@@ -675,9 +678,7 @@ def test_diff_direct_package_does_not_invent_provenance():
 
 def test_diff_uv_lock_new_transitive_gap_names_its_direct_owner(fake_pypi, tmp_path, capsys):
     old = uv_lock(['{ name = "purewheel" }']) + UV_PUREWHEEL
-    newly_depends = UV_PUREWHEEL.replace(
-        "wheels = [", 'dependencies = [{ name = "NoWheels" }]\nwheels = [', 1
-    )
+    newly_depends = UV_PUREWHEEL.replace("wheels = [", 'dependencies = [{ name = "NoWheels" }]\nwheels = [', 1)
     no_wheels = (
         '[[package]]\nname = "NoWheels"\nversion = "0.9"\n'
         'source = { registry = "https://pypi.org/simple" }\n'
