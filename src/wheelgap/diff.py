@@ -390,7 +390,8 @@ def _main(argv: list[str] | None, prog: str) -> int:
     p.add_argument("--macos", metavar="X.Y", help=f"minimum macOS for macos-* targets (default: {DEFAULT_MACOS})")
     p.add_argument("--json", action="store_true", help="print one JSON object instead of the text report")
     p.add_argument(
-        "--deps", action="store_true",
+        "--deps",
+        action="store_true",
         help="resolve two pinned PyPI package specs and compare their full dependency trees",
     )
     args = p.parse_args(argv)
@@ -430,8 +431,7 @@ def _main(argv: list[str] | None, prog: str) -> int:
                 results = check_packages([(name, version)], targets, deps=True)
                 if any(status is Status.UNKNOWN for result in results for status in result.statuses.values()):
                     raise SourceError(
-                        f"--deps couldn't fully resolve {spec!r} for every requested target; "
-                        "compare a lockfile instead"
+                        f"--deps couldn't fully resolve {spec!r} for every requested target; compare a lockfile instead"
                     )
                 sides.append(merge(results, targets))
                 sources.append(Source("api", pypi_only=True))
