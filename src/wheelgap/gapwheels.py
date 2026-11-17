@@ -23,7 +23,7 @@ from packaging.tags import Tag
 from packaging.utils import InvalidWheelFilename, canonicalize_name, parse_wheel_filename
 from packaging.version import InvalidVersion, Version
 
-from . import origin, pypi
+from . import cache, origin, pypi
 from .check import Row, Status, wheel_tags
 from .sources import Source
 from .targets import Target
@@ -97,13 +97,24 @@ def parse(data: object) -> list[GapWheel] | None:
     return [w for w in map(_entry, data["wheels"]) if w is not None]
 
 
-def look_up() -> list[GapWheel] | None:
-    """The gap wheel list, or None if it couldn't be fetched or read."""
+def look_up(*, read_cache: bool = True, write_cache: bool = True) -> list[GapWheel] | None:
+    """Read the published list once, with an optional 24-hour cache and bounded HTTP request.
+
+    Only a structurally valid document is cached; bad responses never become successful hints.
+    Entry validation and exact tag matching remain in parse() and fillable().
+    """
+    if read_cache:
+        cached = cache.load_gap_wheels()
+        if cached is not None and (wheels := parse(cached)) is not None:
+            return wheels
     try:
-        data = pypi.fetch_gap_wheels()
-    except Exception:  # unreachable, a timeout, an HTTP error, a body that isn't JSON...
+        data = pypi.fetch_gap_wheels(timeout=5.0)
+    except Exception:  # unreachable, timeout, oversized or malformed JSON...
         return None
-    return parse(data)
+    wheels = parse(data)
+    if wheels is not None and write_cache:
+        cache.save_gap_wheels(data)
+    return wheels
 
 
 @dataclass(frozen=True)
