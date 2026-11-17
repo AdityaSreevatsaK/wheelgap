@@ -427,7 +427,13 @@ def _main(argv: list[str] | None, prog: str) -> int:
                         "--deps takes two pinned package specs, not local files; omit --deps for lockfiles"
                     )
                 name, version = _pinned_spec(spec)
-                sides.append(merge(check_packages([(name, version)], targets, deps=True), targets))
+                results = check_packages([(name, version)], targets, deps=True)
+                if any(status is Status.UNKNOWN for result in results for status in result.statuses.values()):
+                    raise SourceError(
+                        f"--deps couldn't fully resolve {spec!r} for every requested target; "
+                        "compare a lockfile instead"
+                    )
+                sides.append(merge(results, targets))
                 sources.append(Source("api", pypi_only=True))
         else:
             with tempfile.TemporaryDirectory(prefix="wheelgap-diff-") as tmp:
