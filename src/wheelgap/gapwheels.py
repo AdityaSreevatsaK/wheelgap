@@ -102,10 +102,10 @@ def look_up(*, read_cache: bool = True, write_cache: bool = True) -> list[GapWhe
     entry is kept in the 24-hour cache (--no-cache: neither read nor saved; --online: fetched again, then saved)."""
     if read_cache:
         cached = cache.load_gap_wheels(pypi.GAP_WHEELS_URL)
-        if cached is not None and (wheels := parse(cached)) is not None:
+        if cached is not None and (wheels := parse(cached)):  # as saved: a list with a usable entry
             return wheels
     try:
-        data = pypi.fetch_gap_wheels(timeout=5.0)
+        data = pypi.fetch_gap_wheels()
     except Exception:  # unreachable, a timeout, an HTTP error, a body that isn't JSON or is too big...
         return None
     wheels = parse(data)
