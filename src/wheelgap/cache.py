@@ -190,6 +190,20 @@ def save_build(index: str, name: str, version: str, sha256: str, answer: dict | 
     _save(_build_key(index, sha256), name, version, "build", {"answer": answer})
 
 
+GAP_WHEELS_KEY = "gap-wheels-v1 https://wheelgap.github.io/wheels/data/gap-wheels.json"
+
+
+def load_gap_wheels() -> dict | None:
+    """--fix: a recent validated gap-wheel publication list, or None for a miss."""
+    doc = _load(GAP_WHEELS_KEY, "list", "schema-1", "document")
+    return doc if isinstance(doc, dict) and doc.get("schema") == 1 and isinstance(doc.get("wheels"), list) else None
+
+
+def save_gap_wheels(doc: dict) -> None:
+    """Store a valid publication list without allowing a failed fetch to overwrite the last good one."""
+    _save(GAP_WHEELS_KEY, "list", "schema-1", "document", doc)
+
+
 def load_notes(source: str, name: str) -> list | None:
     """--notes: a package's cached tracker notes (see notes.py) from `source`, or None. An empty list is a cached
     404. notes.py checks each note again."""
