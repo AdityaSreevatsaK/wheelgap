@@ -393,6 +393,38 @@ wheelgap requirements.txt -p 3.14t -t win-arm64 --fix --print-gap-wheel-snippet
 wheelgap uv.lock -p 3.14t -t win-arm64 --fix --print-gap-wheel-snippet
 ```
 
+### `--write-gap-wheel-config` {#write-gap-wheel-config}
+
+With `--fix`, opt in to adding the gap-wheel extra-index line directly to **one explicitly named
+pip requirements file**. This is narrower than `--print-gap-wheel-snippet`: it does not modify
+`uv.lock`, `pyproject.toml`, Dockerfiles, global pip settings or an implicitly discovered
+requirements file.
+
+Only a published wheel matching the **exact** checked release and target permits a write.
+Before doing any index lookup, wheelgap checks that the file is an ordinary UTF-8 requirements
+file without symlinks, hashes, nested requirements, direct URLs, other indexes or pip options.
+If an input is ambiguous, it refuses to write (exit 2); use
+`--fix --print-gap-wheel-snippet` and review the change manually instead. A matching
+`--extra-index-url` already present makes the operation a no-op.
+
+On modification, wheelgap prepends `--extra-index-url https://wheelgap.github.io/wheels/simple/`
+and saves the untouched original to `requirements.txt.wheelgap.bak`. It never overwrites
+an existing backup. To undo the change, restore that backup over the requirements file.
+The file's original line endings, UTF-8 BOM and permissions are retained.
+
+**Security:** pip consults all configured indexes and can install a same-named package
+from another index. Use this option only for packages you know come from public PyPI and
+review the generated edit before installing. No project files are changed on an ordinary
+`--fix` run.
+
+```console
+wheelgap requirements.txt -p 3.14t -t win-arm64 --fix --write-gap-wheel-config
+```
+
+It cannot be combined with `--print-gap-wheel-snippet`, machine-readable output
+(`--json`, `--markdown`) or report-writing options. It retains the original check's
+exit code when it successfully writes or detects an existing line.
+
 ### `-q`, `--quiet`, `--no-quiet` {#quiet}
 
 Print only the gap summary and the affected package names. Clean runs without ignored packages are silent, and JSON
