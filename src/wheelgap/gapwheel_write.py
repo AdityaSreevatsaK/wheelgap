@@ -63,18 +63,26 @@ def apply_requirements_index(path: Path) -> bool:
     if "\r" in text.replace("\r\n", ""):
         raise UnsafeRequirements("requirements file contains unsupported line endings")
     lines = text.splitlines()
-    if any(line.strip() == _INDEX for line in lines):
-        return False
+    existing_index = 0
     for line in lines:
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
-        # A hash-locked requirements file also needs an approved wheel hash for every
-        # new index wheel. Never silently weaken an existing --require-hashes install.
-        if "--hash" in stripped or "\\" in stripped or _OPTIONS.match(line):
+        if stripped == _INDEX:
+            existing_index += 1
+            continue
+        # Hash-pinned installs need the new wheel's hash; alternative indexes and
+        # nested includes can change dependency resolution in ways we cannot prove.
+        if ("--hash" in stripped or "\\" in stripped or stripped.startswith("-")
+                or "://" in stripped or stripped.startswith(("git+", "hg+", "svn+"))
+                or " @ " in stripped):
             raise UnsafeRequirements(
-                "requirements contain hashes, nested files or pip index/options; print the snippet and edit manually"
+                "requirements contain hashes, URLs, nested files or pip options; print the snippet and edit manually"
             )
+    if existing_index > 1:
+        raise UnsafeRequirements("requirements contain duplicate gap-wheel index directives")
+    if existing_index == 1:
+        return False
     backup = path.with_name(path.name + ".wheelgap.bak")
     if backup.exists() or backup.is_symlink():
         raise UnsafeRequirements(f"backup already exists: {backup}; not overwriting it")
