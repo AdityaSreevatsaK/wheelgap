@@ -40,12 +40,8 @@ def _check_file(path: Path) -> os.stat_result:
     return info
 
 
-def apply_requirements_index(path: Path) -> bool:
-    """Prepend the extra index, saving <requirements>.wheelgap.bak first.
-
-    Returns True if written, False if the exact index line already exists.
-    Raises UnsafeRequirements for ambiguity without changing the file.
-    """
+def _prepare_requirements(path: Path) -> tuple[os.stat_result, bytes, bytes, str, str, bool]:
+    """Read and validate before any network lookup or modification."""
     info = _check_file(path)
     try:
         original = path.read_bytes()
@@ -81,12 +77,23 @@ def apply_requirements_index(path: Path) -> bool:
             )
     if existing_index > 1:
         raise UnsafeRequirements("requirements contain duplicate gap-wheel index directives")
-    if existing_index == 1:
+    newline = "\r\n" if "\r\n" in text else "\n"
+    return info, original, bom, text, newline, existing_index == 1
+
+
+def inspect_requirements(path: Path) -> bool:
+    """Whether the exact gap-wheel index is already configured; reject ambiguous files."""
+    return _prepare_requirements(path)[-1]
+
+
+def apply_requirements_index(path: Path) -> bool:
+    """Prepend an index only after a proven matching gap; preserve a reversible backup."""
+    info, original, bom, text, newline, existing = _prepare_requirements(path)
+    if existing:
         return False
     backup = path.with_name(path.name + ".wheelgap.bak")
     if backup.exists() or backup.is_symlink():
         raise UnsafeRequirements(f"backup already exists: {backup}; not overwriting it")
-    newline = "\r\n" if "\r\n" in text else "\n"
     modified = bom + (_INDEX + newline).encode("utf-8") + original[len(bom):]
     if len(modified) > MAX_REQUIREMENTS_BYTES:
         raise UnsafeRequirements("modified requirements would exceed the 2 MB limit")
