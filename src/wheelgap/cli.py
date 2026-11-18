@@ -1741,6 +1741,15 @@ def _main(argv: list[str], project: Path | None = None) -> int:
             or not Path(args.inputs[0]).name.startswith("requirements")
         ):
             parser.error("--write-gap-wheel-config needs exactly one explicit requirements file path")
+    existing_gap_wheel_index = False
+    if args.write_gap_wheel_config:
+        # Preflight before loading sources or contacting any index. A rejected file
+        # must not be treated as a harmless "no matching gap" when resolution is off.
+        try:
+            existing_gap_wheel_index = gapwheel_write.inspect_requirements(Path(args.inputs[0]))
+        except gapwheel_write.UnsafeRequirements as exc:
+            print(f"wheelgap: error: {exc}", file=sys.stderr)
+            return 2
     if args.list_targets and args.markdown:
         parser.error("--list-targets has no Markdown form (use --json)")
     if args.offline and args.online:
@@ -2405,7 +2414,9 @@ def _main(argv: list[str], project: Path | None = None) -> int:
     )
 
     if args.write_gap_wheel_config:
-        if fills:
+        if existing_gap_wheel_index:
+            print("wheelgap: gap-wheel index already configured; no change", file=sys.stderr)
+        elif fills:
             try:
                 changed = gapwheel_write.apply_requirements_index(sources[0].path)
             except gapwheel_write.UnsafeRequirements as exc:
