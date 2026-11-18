@@ -39,17 +39,20 @@ def test_no_fill_makes_no_file_changes(capsys, fake_pypi, gap_wheels, tmp_path):
     assert not (tmp_path / "requirements.txt.wheelgap.bak").exists()
 
 
-@pytest.mark.parametrize("text", [
-    "nowheels==0.9 --hash=sha256:" + "a" * 64,
-    "--require-hashes\nnowheels==0.9",
-    "--index-url https://private.example/simple/\nnowheels==0.9",
-    "--extra-index-url https://other.example/\nnowheels==0.9",
-    "-r other.txt\nnowheels==0.9",
-    "nowheels==0.9 \\\n --hash=sha256:" + "a" * 64,
-    "nowheels @ https://other.example/a.whl",
-    "--extra-index-url " + INDEX + "\n--index-url https://private.example/simple/",
-    "--extra-index-url " + INDEX + "\n--extra-index-url " + INDEX,
-])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "nowheels==0.9 --hash=sha256:" + "a" * 64,
+        "--require-hashes\nnowheels==0.9",
+        "--index-url https://private.example/simple/\nnowheels==0.9",
+        "--extra-index-url https://other.example/\nnowheels==0.9",
+        "-r other.txt\nnowheels==0.9",
+        "nowheels==0.9 \\\n --hash=sha256:" + "a" * 64,
+        "nowheels @ https://other.example/a.whl",
+        "--extra-index-url " + INDEX + "\n--index-url https://private.example/simple/",
+        "--extra-index-url " + INDEX + "\n--extra-index-url " + INDEX,
+    ],
+)
 def test_ambiguous_requirements_are_not_written(capsys, fake_pypi, gap_wheels, tmp_path, text):
     file = tmp_path / "requirements.txt"
     file.write_text(text + "\n", encoding="utf-8")
@@ -91,21 +94,23 @@ def test_utf8_bom_and_no_final_newline_preserved(tmp_path):
     assert path.read_bytes() == b"\xef\xbb\xbf" + f"--extra-index-url {INDEX}\nnowheels==0.9".encode()
 
 
-@pytest.mark.parametrize("args", [
-    ["nowheels==0.9", *OPTIONS],
-    ["requirements.txt", "--write-gap-wheel-config"],
-    ["requirements.txt", *OPTIONS, "--print-gap-wheel-snippet"],
-    ["requirements.txt", *OPTIONS, "--json"],
-    ["requirements.txt", *OPTIONS, "--markdown"],
-    ["requirements.txt", *OPTIONS, "--explain"],
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["nowheels==0.9", *OPTIONS],
+        ["requirements.txt", "--write-gap-wheel-config"],
+        ["requirements.txt", *OPTIONS, "--print-gap-wheel-snippet"],
+        ["requirements.txt", *OPTIONS, "--json"],
+        ["requirements.txt", *OPTIONS, "--markdown"],
+        ["requirements.txt", *OPTIONS, "--explain"],
 ])
 def test_write_requires_explicit_file_and_safe_mode_before_lookup(
-    capsys, fake_pypi, gap_wheels, tmp_path, monkeypatch, args
+        capsys, fake_pypi, gap_wheels, tmp_path, monkeypatch, args
 ):
-    monkeypatch.chdir(tmp_path)
-    (tmp_path / "requirements.txt").write_text("nowheels==0.9\n", encoding="utf-8")
-    with pytest.raises(SystemExit) as error:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "requirements.txt").write_text("nowheels==0.9\n", encoding="utf-8")
+        with pytest.raises(SystemExit) as error:
         cli.main(args)
-    assert error.value.code == 2
-    assert gap_wheels.calls == 0
-    assert fake_pypi == []
+        assert error.value.code == 2
+        assert gap_wheels.calls == 0
+        assert fake_pypi == []
