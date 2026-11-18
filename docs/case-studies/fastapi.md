@@ -4,7 +4,7 @@
 
 ## Targets and selection
 
-FastAPI's pinned [CI test matrix](https://github.com/fastapi/fastapi/blob/b2831196bfee3eb9ce303a3c6440f2a104832954/.github/workflows/test.yml) includes CPython 3.15 on Ubuntu, Windows and macOS runners. We check:
+FastAPI's pinned [CI test matrix](https://github.com/fastapi/fastapi/blob/b2831196bfee3eb9ce303a3c6440f2a104832954/.github/workflows/test.yml) includes CPython 3.15 and free-threaded 3.15t on Ubuntu, Windows and macOS runners. This study checks the regular 3.15 jobs (see [Free-threaded 3.15t](#free-threaded-315t) for the others). We check:
 
 - `linux-x86_64` and `win-amd64`, corresponding to the x64 Linux and Windows runner families.
 - `macos-arm64` as an illustrative Apple-silicon target; the workflow's `macos-latest` label alone does not establish that runner's architecture.
@@ -22,7 +22,7 @@ wheelgap uv.lock -p 3.15 \
   --no-dev --group tests --extra all --explain --suggest
 ```
 
-Trimmed output (the many rejected wheel filenames are omitted):
+Trimmed output (the many rejected wheel filenames and the `macos-arm64` `--explain` block, which reads like the other two, are omitted):
 
 ```text
 wheelgap 0.13.0 · uv.lock · 115 packages · Python 3.15
@@ -59,6 +59,10 @@ The locked release has CPython 3.14 and earlier wheels for these operating syste
 
 With `--suggest`, wheelgap found **no newer PyYAML release** with a compatible wheel for all three checked targets at the time of the scan. Reasonable choices are to validate building PyYAML from source in the relevant CI jobs, use a supported Python version with existing wheels when appropriate, or move to a future PyYAML release with compatible wheels once available and tested. This observation does not imply that FastAPI itself fails to install or that PyYAML cannot compile.
 
+## Free-threaded 3.15t
+
+The same matrix also runs 3.15t, which this scan doesn't cover. The pinned `uv.lock` suggests that target has more gaps: `argon2-cffi-bindings`, `psutil`, `watchfiles` and `ast-serialize` list only `cp314t` and `abi3` wheels for these platforms, and a free-threaded build can't use `abi3` wheels. PyYAML has no `cp315t` wheel either. To check it, run the command above with `-p 3.15t`.
+
 ## Independent pip checks
 
 The study also used pip **26.3** against public PyPI, with `--no-deps --only-binary=:all: --python-version 3.15 --implementation cp --abi cp315`. For `PyYAML==6.0.3` and `PyYAML>=6.0.3`, pip returned **No matching distribution found** for `win_amd64`, `macosx_11_0_arm64` and `manylinux_2_28_x86_64`. The Linux check was for that specific manylinux tag, rather than pip's complete set of compatible older glibc tags; wheelgap checked the full target compatibility.
@@ -71,4 +75,4 @@ python -m pip --isolated download --no-deps --only-binary=:all: \
   --platform win_amd64 --dest wheelhouse "PyYAML==6.0.3"
 ```
 
-Both checks inspect published files. They do not execute any dependency's build or test FastAPI's application behaviour. The commands and results were verified in a [GitHub Actions evidence run](https://github.com/AdityaSreevatsaK/wheelgap/actions/runs/44247392750).
+Both checks inspect published files. They do not execute any dependency's build or test FastAPI's application behaviour.
