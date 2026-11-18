@@ -103,14 +103,15 @@ def test_utf8_bom_and_no_final_newline_preserved(tmp_path):
         ["requirements.txt", *OPTIONS, "--json"],
         ["requirements.txt", *OPTIONS, "--markdown"],
         ["requirements.txt", *OPTIONS, "--explain"],
-])
+    ],
+)
 def test_write_requires_explicit_file_and_safe_mode_before_lookup(
-        capsys, fake_pypi, gap_wheels, tmp_path, monkeypatch, args
+    capsys, fake_pypi, gap_wheels, tmp_path, monkeypatch, args
 ):
-        monkeypatch.chdir(tmp_path)
-        (tmp_path / "requirements.txt").write_text("nowheels==0.9\n", encoding="utf-8")
-        with pytest.raises(SystemExit) as error:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "requirements.txt").write_text("nowheels==0.9\n", encoding="utf-8")
+    with pytest.raises(SystemExit) as error:
         cli.main(args)
-        assert error.value.code == 2
-        assert gap_wheels.calls == 0
-        assert fake_pypi == []
+    assert error.value.code == 2
+    assert gap_wheels.calls == 0
+    assert fake_pypi == []
