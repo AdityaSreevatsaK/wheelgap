@@ -1,0 +1,38 @@
+name: Case study evidence probe (temporary)
+
+on:
+  push:
+    branches: [docs/327-fastapi-case-study]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v7.0.1
+        with:
+          repository: fastapi/fastapi
+          ref: b2831196bfee3eb9ce303a3c6440f2a104832954
+          path: fastapi-study
+          persist-credentials: false
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install wheelgap from this branch
+        run: python -m pip install -e .
+      - name: Scan FastAPI's CI targets using its pinned lockfile
+        shell: bash
+        run: |
+          set +e
+          wheelgap fastapi-study/uv.lock -p 3.15 -t linux-x86_64,win-amd64,macos-arm64 --no-dev --group tests --extra all --explain > scan.txt 2>&1
+          status=$?
+          set -e
+          echo "wheelgap exit: $status"
+          cat scan.txt
+          if [ "$status" -eq 2 ]; then exit 2; fi
