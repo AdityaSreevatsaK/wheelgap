@@ -19,7 +19,7 @@ from packaging.markers import InvalidMarker, Marker
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.utils import canonicalize_name
 
-from . import __version__, cache, condaforge, gapwheels, origin, piwheels
+from . import __version__, cache, condaforge, gapwheel_write, gapwheels, origin, piwheels
 from . import notes as tracker
 from . import suggest as release_suggest
 from .api import explain_issues_urls, running_python
@@ -312,6 +312,12 @@ def make_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="with --fix, print only the configuration that installs the gap wheels, for one uv.lock, requirements "
         "file or package names (other inputs are refused); it never writes to your project",
+    )
+    p.add_argument(
+        "--write-gap-wheel-config",
+        action="store_true",
+        help="with --fix, explicitly add the gap-wheel index to one named requirements file only; "
+        "save a .wheelgap.bak backup; refuse existing pip options and hash-pinned files",
     )
     p.add_argument(
         "-q",
@@ -1705,9 +1711,12 @@ def _main(argv: list[str], project: Path | None = None) -> int:
     args = parser.parse_args(argv)
     if args.json and args.markdown:
         parser.error("--json and --markdown can't be used together")
-    if args.print_gap_wheel_snippet:
+    if args.print_gap_wheel_snippet or args.write_gap_wheel_config:
+        flag = "--write-gap-wheel-config" if args.write_gap_wheel_config else "--print-gap-wheel-snippet"
         if not args.fix:
-            parser.error("--print-gap-wheel-snippet needs --fix")
+            parser.error(f"{flag} needs --fix")
+        if args.write_gap_wheel_config and args.print_gap_wheel_snippet:
+            parser.error("--write-gap-wheel-config and --print-gap-wheel-snippet cannot be combined")
         given = [
             flag
             for flag, value in (
@@ -1726,10 +1735,12 @@ def _main(argv: list[str], project: Path | None = None) -> int:
             if value
         ]
         if given:
-            parser.error(
-                "--print-gap-wheel-snippet prints only the configuration for one uv.lock, requirements file or "
-                f"package names, so it can't be used with {', '.join(given)}"
-            )
+            parser.error(f"{flag} cannot be combined with {', '.join(given)}")
+        if args.write_gap_wheel_config and (
+            len(args.inputs) != 1 or not Path(args.inputs[0]).is_file()
+            or not Path(args.inputs[0]).name.startswith("requirements")
+        ):
+            parser.error("--write-gap-wheel-config needs exactly one explicit requirements file path")
     if args.list_targets and args.markdown:
         parser.error("--list-targets has no Markdown form (use --json)")
     if args.offline and args.online:
@@ -1935,6 +1946,11 @@ def _main(argv: list[str], project: Path | None = None) -> int:
             sources = (
                 [parse_dist(Path(args.dist))] if args.dist else load_inputs(args.inputs or ["."], args.environment)
             )
+        if args.write_gap_wheel_config and (
+            len(sources) != 1 or sources[0].kind != "requirements"
+            or sources[0].path is None or sources[0].path.is_symlink()
+        ):
+            raise SourceError("--write-gap-wheel-config accepts only a single explicit requirements file")
         if args.print_gap_wheel_snippet and (len(sources) != 1 or sources[0].kind not in gapwheels.SNIPPET_KINDS):
             # Decided from the inputs, before any lookup, so the exit code doesn't depend on what the index has.
             raise SourceError(
@@ -2387,6 +2403,25 @@ def _main(argv: list[str], project: Path | None = None) -> int:
         if args.fix
         else None
     )
+
+    if args.write_gap_wheel_config:
+        if fills:
+            try:
+                changed = gapwheel_write.apply_requirements_index(sources[0].path)
+            except gapwheel_write.UnsafeRequirements as exc:
+                print(f"wheelgap: error: {exc}", file=sys.stderr)
+                return 2
+            if changed:
+                print(
+                    f"wheelgap: updated {sources[0].path}; restore the original from "
+                    f"{sources[0].path}.wheelgap.bak to undo",
+                    file=sys.stderr,
+                )
+            else:
+                print("wheelgap: gap-wheel index already configured; no change", file=sys.stderr)
+        else:
+            print("wheelgap: no matching published gap wheel; requirements unchanged", file=sys.stderr)
+        return code
 
     if args.print_gap_wheel_snippet:  # one input of gapwheels.SNIPPET_KINDS, checked when it was read
         multi_py = len({t.python for t in targets}) > 1
