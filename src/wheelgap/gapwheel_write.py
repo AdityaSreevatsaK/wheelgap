@@ -8,7 +8,6 @@ configuration, Dockerfiles, or implicit directory/package inputs.
 from __future__ import annotations
 
 import os
-import re
 import stat
 import tempfile
 from pathlib import Path
@@ -17,9 +16,6 @@ from .gapwheels import INDEX
 
 MAX_REQUIREMENTS_BYTES = 2_000_000
 _INDEX = f"--extra-index-url {INDEX}"
-_OPTIONS = re.compile(r"^\s*(?:-r\b|--requirement\b|-c\b|--constraint\b|--index-url\b|-i\b|"
-                      r"--extra-index-url\b|--no-index\b|--find-links\b|-f\b|--require-hashes\b|"
-                      r"--no-binary\b|--only-binary\b)", re.IGNORECASE)
 
 
 class UnsafeRequirements(ValueError):
@@ -53,7 +49,7 @@ def _prepare_requirements(path: Path) -> tuple[os.stat_result, bytes, bytes, str
         raise UnsafeRequirements("requirements file contains NUL bytes")
     bom = b"\xef\xbb\xbf" if original.startswith(b"\xef\xbb\xbf") else b""
     try:
-        text = original[len(bom):].decode("utf-8")
+        text = original[len(bom) :].decode("utf-8")
     except UnicodeError as exc:
         raise UnsafeRequirements("requirements file is not UTF-8") from exc
     if "\r" in text.replace("\r\n", ""):
@@ -69,9 +65,14 @@ def _prepare_requirements(path: Path) -> tuple[os.stat_result, bytes, bytes, str
             continue
         # Hash-pinned installs need the new wheel's hash; alternative indexes and
         # nested includes can change dependency resolution in ways we cannot prove.
-        if ("--hash" in stripped or "\\" in stripped or stripped.startswith("-")
-                or "://" in stripped or stripped.startswith(("git+", "hg+", "svn+"))
-                or " @ " in stripped):
+        if (
+            "--hash" in stripped
+            or "\\" in stripped
+            or stripped.startswith("-")
+            or "://" in stripped
+            or stripped.startswith(("git+", "hg+", "svn+"))
+            or " @ " in stripped
+        ):
             raise UnsafeRequirements(
                 "requirements contain hashes, URLs, nested files or pip options; print the snippet and edit manually"
             )
@@ -94,7 +95,7 @@ def apply_requirements_index(path: Path) -> bool:
     backup = path.with_name(path.name + ".wheelgap.bak")
     if backup.exists() or backup.is_symlink():
         raise UnsafeRequirements(f"backup already exists: {backup}; not overwriting it")
-    modified = bom + (_INDEX + newline).encode("utf-8") + original[len(bom):]
+    modified = bom + (_INDEX + newline).encode("utf-8") + original[len(bom) :]
     if len(modified) > MAX_REQUIREMENTS_BYTES:
         raise UnsafeRequirements("modified requirements would exceed the 2 MB limit")
     # Recheck the original immediately before writing; concurrent changes are not
