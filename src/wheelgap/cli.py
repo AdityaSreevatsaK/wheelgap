@@ -2417,18 +2417,20 @@ def _main(argv: list[str], project: Path | None = None) -> int:
     )
 
     if args.write_gap_wheel_config:
+        requirements_path = sources[0].path
+        assert requirements_path is not None  # validated before any index lookup
         if existing_gap_wheel_index:
             print("wheelgap: gap-wheel index already configured; no change", file=sys.stderr)
         elif fills:
             try:
-                changed = gapwheel_write.apply_requirements_index(sources[0].path)
+                changed = gapwheel_write.apply_requirements_index(requirements_path)
             except gapwheel_write.UnsafeRequirements as exc:
                 print(f"wheelgap: error: {exc}", file=sys.stderr)
                 return 2
             if changed:
                 print(
-                    f"wheelgap: updated {sources[0].path}; restore the original from "
-                    f"{sources[0].path}.wheelgap.bak to undo",
+                    f"wheelgap: updated {requirements_path}; restore the original from "
+                    f"{requirements_path}.wheelgap.bak to undo",
                     file=sys.stderr,
                 )
             else:
