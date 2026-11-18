@@ -1,11 +1,9 @@
 """Explicitly writing a gap-wheel index is opt-in and must be safe to reverse."""
 
-from pathlib import Path
-
 import pytest
 from test_cli import run
 
-from wheelgap import cli, gapwheel_write, gapwheels
+from wheelgap import cli, gapwheel_write
 
 INDEX = "https://wheelgap.github.io/wheels/simple/"
 OPTIONS = ["-p", "3.14t", "-t", "win-arm64", "--fix", "--write-gap-wheel-config"]
