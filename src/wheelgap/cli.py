@@ -1737,7 +1737,8 @@ def _main(argv: list[str], project: Path | None = None) -> int:
         if given:
             parser.error(f"{flag} cannot be combined with {', '.join(given)}")
         if args.write_gap_wheel_config and (
-            len(args.inputs) != 1 or not Path(args.inputs[0]).is_file()
+            len(args.inputs) != 1
+            or not Path(args.inputs[0]).is_file()
             or not Path(args.inputs[0]).name.startswith("requirements")
         ):
             parser.error("--write-gap-wheel-config needs exactly one explicit requirements file path")
@@ -1956,8 +1957,10 @@ def _main(argv: list[str], project: Path | None = None) -> int:
                 [parse_dist(Path(args.dist))] if args.dist else load_inputs(args.inputs or ["."], args.environment)
             )
         if args.write_gap_wheel_config and (
-            len(sources) != 1 or sources[0].kind != "requirements"
-            or sources[0].path is None or sources[0].path.is_symlink()
+            len(sources) != 1
+            or sources[0].kind != "requirements"
+            or sources[0].path is None
+            or sources[0].path.is_symlink()
         ):
             raise SourceError("--write-gap-wheel-config accepts only a single explicit requirements file")
         if args.print_gap_wheel_snippet and (len(sources) != 1 or sources[0].kind not in gapwheels.SNIPPET_KINDS):
