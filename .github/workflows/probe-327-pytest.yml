@@ -1,0 +1,61 @@
+name: Temporary pytest wheel case study probe
+
+on:
+  push:
+    branches:
+      - docs/327-pytest-case-study-20261119
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - name: Install pinned wheelgap
+        run: python -m pip install wheelgap==0.13.0
+      - name: Fetch pytest lockfile at pinned commit
+        run: |
+          curl --fail --location --silent --show-error \
+            https://raw.githubusercontent.com/pytest-dev/pytest/6665a79fb9a6553ce4e1be5574c21a9e3b769eec/uv.lock \
+            --output pytest-uv.lock
+          mv pytest-uv.lock uv.lock
+          sha256sum uv.lock
+      - name: Check evidenced Linux Windows and macOS targets
+        shell: bash
+        run: |
+          set +e
+          wheelgap uv.lock -p 3.15 \
+            -t linux-x86_64,win-amd64,macos-arm64 \
+            --glibc 2.36 --macos 15.0 --json --no-cache > /tmp/pytest-wheelgap-report.json
+          scan_status=$?
+          wheelgap uv.lock -p 3.15 \
+            -t linux-x86_64,win-amd64,macos-arm64 \
+            --glibc 2.36 --macos 15.0 --explain --suggest --no-cache > /tmp/pytest-wheelgap-explain.txt 2>&1
+          explain_status=$?
+          set -e
+          echo "scan_exit=$scan_status explain_exit=$explain_status"
+          wc -c /tmp/pytest-wheelgap-report.json /tmp/pytest-wheelgap-explain.txt
+          echo "::group::Report"
+          cat /tmp/pytest-wheelgap-report.json
+          echo "::endgroup::"
+          echo "::group::Explanations"
+          cat /tmp/pytest-wheelgap-explain.txt
+          echo "::endgroup::"
+          test "$scan_status" -le 1
+          test "$explain_status" -le 1
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pytest-wheelgap-case-study
+          path: |
+            /tmp/pytest-wheelgap-report.json
+            /tmp/pytest-wheelgap-explain.txt
+          if-no-files-found: warn
