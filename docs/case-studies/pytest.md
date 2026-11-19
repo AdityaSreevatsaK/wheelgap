@@ -49,6 +49,30 @@ Here `source` means an sdist exists but no matching prebuilt wheel was found. It
 
 **PyYAML 6.0.3:** The same Python-version mismatch occurs on each selected platform. For example, its `cp314-cp314-win_amd64` wheel is not a CPython 3.15 wheel. The dependency path is `pytest → pyyaml`. `--suggest` found **no newer release** supplying wheels for all three selected targets at scan time. A source build remains an option, subject to validating its build dependencies and compatibility.
 
+## Independent pip checks
+
+A separate [GitHub Actions run](https://github.com/AdityaSreevatsaK/wheelgap/actions/runs/44464528671) used **pip 26.3** with `--dry-run --ignore-installed --no-deps --only-binary=:all:`, the public PyPI index, `--python-version 3.15 --implementation cp --abi cp315`, and each target's platform tags.
+
+| Package | Linux x86_64 | Windows x64 | macOS ARM64 |
+| --- | --- | --- | --- |
+| NumPy 2.4.1 | No matching wheel | No matching wheel | No matching wheel |
+| PyYAML 6.0.3 | No matching wheel | No matching wheel | No matching wheel |
+| NumPy 2.5.2 | Wheel available | Wheel available | Wheel available |
+
+All nine checks agreed with wheelgap's results. The Linux check passed the full manylinux tag range from glibc 2.36 down to 2.5 plus legacy `manylinux2014`, `manylinux2010`, `manylinux1` and `linux_x86_64`; a single modern Linux tag would incorrectly miss older compatible wheels.
+
+For example, to check one Windows result:
+
+```bash
+python -m pip --isolated install \
+  --dry-run --ignore-installed --no-deps --only-binary=:all: \
+  --index-url https://pypi.org/simple \
+  --python-version 3.15 --implementation cp --abi cp315 \
+  --platform win_amd64 'PyYAML==6.0.3'
+```
+
+pip reports `No matching distribution found`. Repeating with `numpy==2.5.2` reports `Would install numpy-2.5.2`. These checks validate published wheel availability only; they do not install or run the packages.
+
 ## What this check does and does not establish
 
 The check inspects pinned package artefacts, not actual execution of pytest, installation of its full development environment or source compilation. The result does not imply a runtime dependency problem for users installing pytest. Other Python versions, optional groups, operating-system revisions and alternative index settings require their own checks.
