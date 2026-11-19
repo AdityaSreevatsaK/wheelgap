@@ -79,6 +79,12 @@ jobs:
             verify "$pkg" win-amd64 --platform win_amd64
             verify "$pkg" macos-arm64 --platform macosx_15_0_arm64
           done
+      - name: Build docs in strict mode
+        run: |
+          python -m pip install uv
+          uv run --locked --only-group docs mkdocs build --strict --site-dir _site
+        env:
+          NO_MKDOCS_2_WARNING: "1"
       - name: Upload report
         uses: actions/upload-artifact@v4
         if: always()
