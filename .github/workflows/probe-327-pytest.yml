@@ -50,6 +50,35 @@ jobs:
           echo "::endgroup::"
           test "$scan_status" -le 1
           test "$explain_status" -le 1
+      - name: Independently verify gaps with pip binary-only checks
+        shell: bash
+        run: |
+          python -m pip install pip==26.3
+          linux_tags=()
+          for ((minor=36; minor>=5; minor--)); do
+            linux_tags+=(--platform "manylinux_2_${minor}_x86_64")
+          done
+          linux_tags+=(--platform manylinux2014_x86_64 --platform manylinux2010_x86_64 --platform manylinux1_x86_64 --platform linux_x86_64)
+          verify() {
+            pkg="$1"
+            target="$2"
+            shift 2
+            set +e
+            python -m pip --isolated --disable-pip-version-check install \
+              --dry-run --ignore-installed --no-deps --only-binary=:all: \
+              --index-url https://pypi.org/simple \
+              --python-version 3.15 --implementation cp --abi cp315 \
+              "$@" "$pkg" > /tmp/check.log 2>&1
+            status=$?
+            set -e
+            echo "binary_check package=$pkg target=$target exit=$status"
+            grep -E 'Would install|No matching distribution found|Could not find a version' /tmp/check.log | tail -n 5 || true
+          }
+          for pkg in 'numpy==2.4.1' 'PyYAML==6.0.3' 'numpy==2.5.2'; do
+            verify "$pkg" linux-x86_64 "${linux_tags[@]}"
+            verify "$pkg" win-amd64 --platform win_amd64
+            verify "$pkg" macos-arm64 --platform macosx_15_0_arm64
+          done
       - name: Upload report
         uses: actions/upload-artifact@v4
         if: always()
