@@ -22,20 +22,20 @@ jobs:
         run: python -m pip install wheelgap==0.13.0
       - name: Fetch pytest lockfile at pinned commit
         run: |
+          mkdir -p "$RUNNER_TEMP/pytest-case-study"
           curl --fail --location --silent --show-error \
             https://raw.githubusercontent.com/pytest-dev/pytest/6665a79fb9a6553ce4e1be5574c21a9e3b769eec/uv.lock \
-            --output pytest-uv.lock
-          mv pytest-uv.lock uv.lock
-          sha256sum uv.lock
+            --output "$RUNNER_TEMP/pytest-case-study/uv.lock"
+          sha256sum "$RUNNER_TEMP/pytest-case-study/uv.lock"
       - name: Check evidenced Linux Windows and macOS targets
         shell: bash
         run: |
           set +e
-          wheelgap uv.lock -p 3.15 \
+          wheelgap "$RUNNER_TEMP/pytest-case-study/uv.lock" -p 3.15 \
             -t linux-x86_64,win-amd64,macos-arm64 \
             --glibc 2.36 --macos 15.0 --json --no-cache > /tmp/pytest-wheelgap-report.json
           scan_status=$?
-          wheelgap uv.lock -p 3.15 \
+          wheelgap "$RUNNER_TEMP/pytest-case-study/uv.lock" -p 3.15 \
             -t linux-x86_64,win-amd64,macos-arm64 \
             --glibc 2.36 --macos 15.0 --explain --suggest --no-cache > /tmp/pytest-wheelgap-explain.txt 2>&1
           explain_status=$?
